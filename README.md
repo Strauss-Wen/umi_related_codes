@@ -89,3 +89,24 @@ Finally, save all the T[marker/object] to a .npy file. Array in this file has a 
 python foundation-pose_trajectory_extraction/foundationpose_marker_as_origin.py [path-to-scene_folder] [path-to-T_matrix.npy]
 ```
 
+## load_to_sapien
+Load and show the generated tajectory matrix T into sapien.  
+
+### Prerequisites
+- Calculate the matrix T of object' trajectory or gopro's trajectory.
+- setup the sapien environment
+
+### Usage
+Use real2sim_from_T.py to show the trajectory of object.  
+The object is represented by a red box for now.  
+
+```python
+python load_to_sapien/real2sim_from_T.py [path-to-trajectory-T-npy-file]
+```
+
+Use real2sim_from_T_gripper.py to show the gripper's trajectory with Xarm's urdf mesh.  
+Xarm's urdf files are attached in ./xarm_urdf  
+
+```python
+python load_to_sapien/real2sim_from_T_gripper.py [path-to-trajectory-T-npy-file]
+```
