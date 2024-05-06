@@ -1,29 +1,35 @@
 # extract the first frame of a mp4 file. used for detecting the position of camera_ori pose
 import cv2
 import sys
+import numpy as np
+# import pdb
 
-mp4_file_path = sys.argv[1]
+def extract_first_frame(mp4_file_path: str) -> np.ndarray:
+    """
+    extract the first frame of a given mp4 file. \n
+    Input: path to .mp4 file \n
+    Return: numpy array typically with shape [W H C] \n
+    """
+    
+    cap = cv2.VideoCapture(mp4_file_path)
+    if not cap.isOpened():
+        print("Error: Unable to open video file.")
+        exit()
 
-cap = cv2.VideoCapture(mp4_file_path)
-if not cap.isOpened():
-    print("Error: Unable to open video file.")
-    exit()
+    ret, frame = cap.read()
 
-# Read the first frame
-ret, frame = cap.read()
+    if not ret:
+        print("Error: Unable to read the first frame.")
+        cap.release()
+        exit()
 
-# Check if the frame was successfully read
-if not ret:
-    print("Error: Unable to read the first frame.")
     cap.release()
-    exit()
+    # pdb.set_trace()
 
-cap.release()
+    return frame
 
-# Display or save the first frame
-# For example, you can display the first frame using imshow
-# cv2.imshow("gp_first_frame", frame)
-# cv2.waitKey(0)  # Wait for any key to be pressed
-# cv2.destroyAllWindows()
-cv2.imwrite("gp_first_frame.png", frame)
+if __name__ == "__main__":
+    mp4_file_path = sys.argv[1]
+    first_frame = extract_first_frame(mp4_file_path=mp4_file_path)
+    cv2.imwrite("gp_first_frame.png", first_frame)
 
