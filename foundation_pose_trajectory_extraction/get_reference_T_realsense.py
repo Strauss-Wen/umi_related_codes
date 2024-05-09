@@ -59,6 +59,6 @@ def get_reference_T_realsense(color_frame: np.ndarray, marker_size: float, camer
 if __name__ == "__main__":
     pic = sys.argv[1]
     color_frame = cv2.imread(pic)
-    ref_T = get_reference_T_realsense()(color_frame=color_frame, marker_size=0.174)
+    ref_T = get_reference_T_realsense(color_frame=color_frame, marker_size=0.174)
     print(ref_T)    # T[marker_ref/camera]
     np.save("T_matrix.npy", ref_T)

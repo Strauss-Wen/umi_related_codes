@@ -1,4 +1,4 @@
-# umi_related_codes
+# umi related codes
 
 Note: the files in this repository is assembled from multiple places in a bigger directory. I'm still testing whether the dependency relationships are complete.
 
@@ -54,7 +54,7 @@ First, record the scene as a series of rgb/depth pictures.
 Press Space to start recording after the program is launched. Press Space again to stop recording.
 
 ```python
-python foundation-pose_trajectory_extraction/realsense_align_rgb_depth.py
+python foundation_pose_trajectory_extraction/realsense_align_rgb_depth.py
 ```
 
 Second, generate a black-white mask of the target object at the first frame. The mask should also be a picture with the same resolution to the rgb' first frame.  
@@ -79,17 +79,34 @@ A folder called *ob_in_cam* should be generated under scene_folder.
 
 Fifth, run get_reference_T.py to generate the T[marker/camera]  
 ```python
-python foundation-pose_trajectory_extraction/get_reference_T.py [path-to-first-rgb-image]
+python foundation_pose_trajectory_extraction/get_reference_T.py [path-to-first-rgb-image]
 ```
 
 Sixth, align the foundation-pose's image with gopro manually. delete the extra frames in ob_in_cam to let the first frame of foundation-pose aligned with the first frame of gopro.  
 
 Finally, save all the T[marker/object] to a .npy file. Array in this file has a shape of [N2 4 4]
 ```python
-python foundation-pose_trajectory_extraction/foundationpose_marker_as_origin.py [path-to-scene_folder] [path-to-T_matrix.npy]
+python foundation_pose_trajectory_extraction/foundationpose_marker_as_origin.py [path-to-scene_folder] [path-to-T_matrix.npy]
 ```
 
-## load_to_sapien
+## Automatic trajectory extraction
+Use main.py to automatic the process of trajectory extraction/calibration for both GoPro and Foundation-Pose.  
+Outputs are the gp_T.npy and fp_T.npy saved in the same directory of main.py.  
+Both files contain the gripper/object's trajectory with the marker as the reference frame, and could be used directly for sapien simulation.  
+
+## Prerequisites
+- Run the Foundation-Pose to get object's T matrices saved in ./ob_in_cam
+- Run the UMI to get the GoPro's trajectory saved in camera_trajectory.csv
+- Get the raw record (raw_video.mp4) of GoPro in this scene. Usually it is located in the same directory with camera_trajectory.csv
+- Get the path to foundation-pose directory of this scene. It contains sub-directories of ./rgb ./depth ./ob_in_cam etc.
+
+## Usage
+```python
+python main.py [path-to-camera_trajectory.csv] [path-to-raw_video.mp4] [path-to-foundation-pose-directory]
+```
+
+
+## Load to sapien
 Load and show the generated tajectory matrix T into sapien.  
 
 ### Prerequisites
@@ -110,3 +127,12 @@ Xarm's urdf files are attached in ./xarm_urdf
 ```python
 python load_to_sapien/real2sim_from_T_gripper.py [path-to-trajectory-T-npy-file]
 ```
+
+Use real2sim_both.py to show the gripper's and object's trajectories.  
+
+```python
+python load_to_sapien/real2sim_both.py [path-to-gp_T.npy] [path-to-fp_T.npy]
+```
+
+
+
