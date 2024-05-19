@@ -31,10 +31,10 @@ from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs import Pose
 from mani_skill.utils.structs.types import Array, GPUMemoryConfig, SimConfig
+from maniskill.utils.building.ground import build_ground
 
-
-@register_env("PushCube-v1", max_episode_steps=50)
-class PushCubeEnv(BaseEnv):
+@register_env("ExpertDemo-v1", max_episode_steps=50)
+class ExpertDemoEnv(BaseEnv):
     """
     Task Description
     ----------------
@@ -102,10 +102,15 @@ class PushCubeEnv(BaseEnv):
 
     def _load_scene(self, options: dict):
         # we use a prebuilt scene builder class that automatically loads in a floor and table.
+        # note: we dont need a table here
+        """         
         self.table_scene = TableSceneBuilder(
             env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
         )
         self.table_scene.build()
+        """
+        # we just place our objects on the ground
+        self.ground = build_ground(self.scene)
 
         # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
         # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
@@ -120,6 +125,7 @@ class PushCubeEnv(BaseEnv):
         # we also add in red/white target to visualize where we want the cube to be pushed to
         # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
         # we finally specify the body_type to be "kinematic" so that the object stays in place
+        """ 
         self.goal_region = actors.build_red_white_target(
             self.scene,
             radius=self.goal_radius,
@@ -128,7 +134,7 @@ class PushCubeEnv(BaseEnv):
             add_collision=False,
             body_type="kinematic",
         )
-
+        """
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
         # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
@@ -144,7 +150,9 @@ class PushCubeEnv(BaseEnv):
             b = len(env_idx)
             # when using scene builders, you must always call .initialize on them so they can set the correct poses of objects in the prebuilt scene
             # note that the table scene is built such that z=0 is the surface of the table.
+            """
             self.table_scene.initialize(env_idx)
+            """
 
             # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.1, -0.1] to [0.1, 0.1]
             xyz = torch.zeros((b, 3))
@@ -161,6 +169,7 @@ class PushCubeEnv(BaseEnv):
 
             # here we set the location of that red/white target (the goal region). In particular here, we set the position to be in front of the cube
             # and we further rotate 90 degrees on the y-axis to make the target object face up
+            """             
             target_region_xyz = xyz + torch.tensor([0.1 + self.goal_radius, 0, 0])
             # set a little bit above 0 so the target is sitting on the table
             target_region_xyz[..., 2] = 1e-3
@@ -170,10 +179,10 @@ class PushCubeEnv(BaseEnv):
                     q=euler2quat(0, np.pi / 2, 0),
                 )
             )
+            """
 
     def evaluate(self):
-        # success is achieved when the cube's xy position on the table is within the
-        # goal region's area (a circle centered at the goal region's xy position)
+        # TODO: redefine success based on whether final pose of cube matches desired target pose
         is_obj_placed = (
             torch.linalg.norm(
                 self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
@@ -201,6 +210,8 @@ class PushCubeEnv(BaseEnv):
         return obs
 
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
+        # TODO: define reward function based on trajectory and timestep (info should have information about this)
+
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
             p=self.obj.pose.p
