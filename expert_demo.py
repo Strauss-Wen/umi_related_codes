@@ -144,9 +144,10 @@ class ExpertDemoEnv(BaseEnv):
 
             # code to set position of the cube, we use half size to set z height
             # we run this on the ground so z=0 is the ground
-            q = [1, 0, 0, 0]
-            xyz = self.cube_aim_position
+            xyz = torch.zeros((b, 3))
+            xyz[..., :2] = torch.rand((b, 2)) * 0.2 - 0.1
             xyz[..., 2] = self.cube_half_size
+            q = [1, 0, 0, 0]
             
             # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
             # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
