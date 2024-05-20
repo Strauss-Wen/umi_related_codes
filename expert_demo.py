@@ -33,7 +33,7 @@ from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs import Pose
 from mani_skill.utils.structs.types import Array, GPUMemoryConfig, SimConfig
-from maniskill.utils.building.ground import build_ground
+from mani_skill.utils.building.ground import build_ground
 
 @register_env("ExpertDemo-v1", max_episode_steps=50)
 class ExpertDemoEnv(BaseEnv):
