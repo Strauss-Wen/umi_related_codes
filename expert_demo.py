@@ -205,7 +205,7 @@ class ExpertDemoEnv(BaseEnv):
             self.env.agent.robot.set_pos(sapien.Pose(self.robot_pose))
 
     def evaluate(self):
-        # TODO: redefine success based on whether final pose of cube matches desired target pose
+        # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
         is_obj_placed = (
             torch.linalg.norm(
                 self.obj.pose.p[..., :2] - self.cube_aim_position, axis=1
@@ -234,6 +234,7 @@ class ExpertDemoEnv(BaseEnv):
 
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
+        # TODO: take rotation into account with reward function as well as specific object size
 
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
