@@ -203,7 +203,7 @@ class ExpertDemoEnv(BaseEnv):
             )
 
             self.env.agent.reset(qpos)
-            self.env.agent.robot.set_pos(sapien.Pose(self.robot_pose))
+            self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
