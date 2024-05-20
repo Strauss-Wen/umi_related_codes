@@ -146,6 +146,7 @@ class ExpertDemoEnv(BaseEnv):
         """
         with torch.device(self.device):
             self.cube_aim_position = torch.unsqueeze(torch.tensor(self.cube_aim_position), dim=0)
+            self.cube_aim_position.repeat((self.obj.pose.shape[0], 1))
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
         # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
@@ -209,14 +210,12 @@ class ExpertDemoEnv(BaseEnv):
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
-        import pdb; pdb.set_trace()
         is_obj_placed = (
             torch.linalg.norm(
                 self.obj.pose.p[..., :2] - self.cube_aim_position[:,:2], axis=1
             )
             < self.goal_radius
         )
-        import pdb; pdb.set_trace()
 
         return {
             "success": is_obj_placed,
