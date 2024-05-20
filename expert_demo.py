@@ -231,6 +231,7 @@ class ExpertDemoEnv(BaseEnv):
         if self._obs_mode in ["state", "state_dict"]:
             # if the observation mode is state/state_dict, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
+            import pdb; pdb.set_trace()
             obs.update(
                 goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
