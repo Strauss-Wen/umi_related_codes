@@ -110,14 +110,7 @@ class ExpertDemoEnv(BaseEnv):
         )
 
     def _load_scene(self, options: dict):
-        # we use a prebuilt scene builder class that automatically loads in a floor and table.
         # note: we dont need a table here
-        """         
-        self.table_scene = TableSceneBuilder(
-            env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
-        )
-        self.table_scene.build()
-        """
         # we just place our objects on the ground
         self.ground = build_ground(self.scene)
 
@@ -131,22 +124,9 @@ class ExpertDemoEnv(BaseEnv):
             body_type="dynamic",
         )
 
-        # we also add in red/white target to visualize where we want the cube to be pushed to
-        # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
-        # we finally specify the body_type to be "kinematic" so that the object stays in place
-        """ 
-        self.goal_region = actors.build_red_white_target(
-            self.scene,
-            radius=self.goal_radius,
-            thickness=1e-5,
-            name="goal_region",
-            add_collision=False,
-            body_type="kinematic",
-        )
-        """
+        # initialize our cube position tensor and put it on the gpu 
         with torch.device(self.device):
             self.cube_aim_position = torch.unsqueeze(torch.tensor(self.cube_aim_position), dim=0)
-            import pdb; pdb.set_trace()
             self.cube_aim_position = self.cube_aim_position.repeat((self.obj._num_objs, 1))
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
@@ -161,20 +141,12 @@ class ExpertDemoEnv(BaseEnv):
             # are designed to support partial resets, where you generate initial state for a subset of the environments.
             # this is done by using the env_idx variable, which also tells you the batch size
             b = len(env_idx)
-            # when using scene builders, you must always call .initialize on them so they can set the correct poses of objects in the prebuilt scene
-            # note that the table scene is built such that z=0 is the surface of the table.
-            """
-            self.table_scene.initialize(env_idx)
-            """
 
-            # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.1, -0.1] to [0.1, 0.1]
-            """ 
-            xyz = torch.zeros((b, 3))
-            xyz[..., :2] = torch.rand((b, 2)) * 0.2 - 0.1
-            xyz[..., 2] = self.cube_half_size
-            """
+            # code to set position of the cube, we use half size to set z height
+            # we run this on the ground so z=0 is the ground
             q = [1, 0, 0, 0]
             xyz = self.cube_aim_position
+            xyz[..., 2] = self.cube_half_size
             
             # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
             # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
@@ -183,20 +155,6 @@ class ExpertDemoEnv(BaseEnv):
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
             obj_pose = Pose.create_from_pq(p=xyz, q=q)
             self.obj.set_pose(obj_pose)
-
-            # here we set the location of that red/white target (the goal region). In particular here, we set the position to be in front of the cube
-            # and we further rotate 90 degrees on the y-axis to make the target object face up
-            """             
-            target_region_xyz = xyz + torch.tensor([0.1 + self.goal_radius, 0, 0])
-            # set a little bit above 0 so the target is sitting on the table
-            target_region_xyz[..., 2] = 1e-3
-            self.goal_region.set_pose(
-                Pose.create_from_pq(
-                    p=target_region_xyz,
-                    q=euler2quat(0, np.pi / 2, 0),
-                )
-            )
-            """
 
             # finally set the qpos of the robot
             qpos = (
@@ -231,7 +189,6 @@ class ExpertDemoEnv(BaseEnv):
         if self._obs_mode in ["state", "state_dict"]:
             # if the observation mode is state/state_dict, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
-            import pdb; pdb.set_trace()
             obs.update(
                 goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
