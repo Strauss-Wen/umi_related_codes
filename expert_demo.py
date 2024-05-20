@@ -232,7 +232,7 @@ class ExpertDemoEnv(BaseEnv):
             # if the observation mode is state/state_dict, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
             obs.update(
-                    goal_pos=self.cube_aim_position[0],
+                goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
             )
         return obs
