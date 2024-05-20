@@ -207,9 +207,10 @@ class ExpertDemoEnv(BaseEnv):
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
+        import pdb; pdb.set_trace()
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position, axis=1
+                self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position[:2], axis=1
             )
             < self.goal_radius
         )
@@ -252,7 +253,7 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-            self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position, axis=1
+                self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position[:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
