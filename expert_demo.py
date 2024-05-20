@@ -66,14 +66,14 @@ class ExpertDemoEnv(BaseEnv):
     def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
-        super().__init__(*args, robot_uids=robot_uids, **kwargs)
-
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
         self.cube_aim_position = np.array([0, 0.3, 0.02])
         self.goal_radius = 0.08
 
+        super().__init__(*args, robot_uids=robot_uids, **kwargs)
+        
     # Specify default simulation/gpu memory configurations to override any default values
     @property
     def _default_sim_config(self):
