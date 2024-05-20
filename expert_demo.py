@@ -71,6 +71,7 @@ class ExpertDemoEnv(BaseEnv):
         self.robot_pose = [-0.16, -0.4, 0]
         self.cube_aim_position = np.array([0, 0.3, 0.02])
         self.goal_radius = 0.08
+        self.env = self
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         
