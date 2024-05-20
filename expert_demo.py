@@ -207,14 +207,12 @@ class ExpertDemoEnv(BaseEnv):
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
-        import pdb; pdb.set_trace()
         is_obj_placed = (
             torch.linalg.norm(
                 self.obj.pose.p[..., :2].detach().cpu() - self.cube_aim_position[:2], axis=1
             )
             < self.goal_radius
         )
-        import pdb; pdb.set_trace()
 
         return {
             "success": is_obj_placed,
@@ -230,7 +228,7 @@ class ExpertDemoEnv(BaseEnv):
             # if the observation mode is state/state_dict, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
             obs.update(
-                goal_pos=self.goal_region.pose.p,
+                goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
             )
         return obs
