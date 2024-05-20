@@ -69,7 +69,7 @@ class ExpertDemoEnv(BaseEnv):
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
-        self.cube_aim_position = np.array([0, 0.3, 0.02])
+        self.cube_aim_position = torch.tensor([0, 0.3, 0.02])
         self.goal_radius = 0.08
         self.env = self
 
@@ -210,10 +210,11 @@ class ExpertDemoEnv(BaseEnv):
         import pdb; pdb.set_trace()
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position[:2], axis=1
+                self.obj.pose.p[..., :2].detach().cpu() - self.cube_aim_position[:2], axis=1
             )
             < self.goal_radius
         )
+        import pdb; pdb.set_trace()
 
         return {
             "success": is_obj_placed,
