@@ -256,7 +256,7 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_aim_position[,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_aim_position[:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
