@@ -20,6 +20,8 @@ from typing import Any, Dict, Union
 import numpy as np
 import torch
 import torch.random
+import sapien
+import sapien.render
 from transforms3d.euler import euler2quat
 
 from mani_skill.agents.robots import Fetch, Panda, Xmate3Robotiq
@@ -65,6 +67,12 @@ class ExpertDemoEnv(BaseEnv):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
+
+        self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
+                                0.0, 2.94155926, 0.78539816, 0.0, 0.0])
+        self.robot_pose = [-0.16, -0.4, 0]
+        self.cube_aim_position = np.array([0, 0.3, 0.02])
+        self.goal_radius = 0.08
 
     # Specify default simulation/gpu memory configurations to override any default values
     @property
@@ -155,10 +163,14 @@ class ExpertDemoEnv(BaseEnv):
             """
 
             # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.1, -0.1] to [0.1, 0.1]
+            """ 
             xyz = torch.zeros((b, 3))
             xyz[..., :2] = torch.rand((b, 2)) * 0.2 - 0.1
             xyz[..., 2] = self.cube_half_size
+            """
             q = [1, 0, 0, 0]
+            xyz = self.cube_aim_position
+            
             # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
             # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
             # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
@@ -181,11 +193,22 @@ class ExpertDemoEnv(BaseEnv):
             )
             """
 
+            # finally set the qpos of the robot
+            qpos = (
+                self.env._episode_rng.normal(
+                    0, self.robot_init_qpos_noise, (b, len(self.init_qpos))
+                )
+                + self.init_qpos 
+            )
+
+            self.env.agent.reset(qpos)
+            self.env.agent.robot.set_pos(sapien.Pose(self.robot_pose))
+
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target pose
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_aim_position, axis=1
             )
             < self.goal_radius
         )
@@ -227,7 +250,7 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-            self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
+            self.obj.pose.p[..., :2] - self.cube_aim_position, axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
