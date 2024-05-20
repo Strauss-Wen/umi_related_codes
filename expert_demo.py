@@ -69,7 +69,7 @@ class ExpertDemoEnv(BaseEnv):
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
-        self.cube_aim_position = torch.tensor([0, 0.3, 0.02])
+        self.cube_aim_position = [0, 0.3, 0.02]
         self.goal_radius = 0.08
         self.env = self
 
@@ -144,6 +144,8 @@ class ExpertDemoEnv(BaseEnv):
             body_type="kinematic",
         )
         """
+        with torch.device(self.device):
+            sels.cube_aim_position = torch.tensor(self.cube_aim_position)
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
         # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
@@ -209,7 +211,7 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2].detach().cpu() - self.cube_aim_position[:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_aim_position[:2], axis=1
             )
             < self.goal_radius
         )
@@ -252,7 +254,7 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2].detach().cpu().numpy() - self.cube_aim_position[:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_aim_position[:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
