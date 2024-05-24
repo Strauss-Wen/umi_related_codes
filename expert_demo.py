@@ -200,6 +200,9 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
 
+        # the pose of the agent
+        # self.env.agent.robot.pose.p
+
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
             p=self.obj.pose.p
