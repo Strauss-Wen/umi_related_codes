@@ -148,6 +148,8 @@ class ExpertDemoUMIEnv(BaseEnv):
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         self.robot_pos = []
         self.robot_rot = []
+        self.cube_pos = []
+        self.cube_rot = []
         # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
         with torch.device(self.device):
             # the initialization functions where you as a user place all the objects and initialize their properties

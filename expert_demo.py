@@ -162,7 +162,7 @@ class ExpertDemoEnv(BaseEnv):
             # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
             # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
-            obj_pose = Pose.create_from_pq(p=self.cube_pose, q=self.cube_rot)
+            obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) # set initial cube pose to match trajectory start
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot
@@ -178,9 +178,11 @@ class ExpertDemoEnv(BaseEnv):
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
+        # use self.env.elapsed_steps to get the index of correct robot and cube position
+        # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_aim_position[:,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pos[self.env.elapsed_steps[0],:2], axis=1
             )
             < self.goal_radius
         )
@@ -207,14 +209,6 @@ class ExpertDemoEnv(BaseEnv):
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
-
-        # the pose of the agent
-        # self.env.agent.robot.pose.p
-        if self.traj_dest:
-            cur_pose = self.env.agent.robot.pose.p[0]
-            cur_rot = self.env.agent.robot.pose.q[0]
-            # save both to self.traj_dest in some way
-            # i.e. store in some global dictionary then when trajectory is success save
 
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
