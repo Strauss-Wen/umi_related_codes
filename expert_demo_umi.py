@@ -191,11 +191,11 @@ class ExpertDemoUMIEnv(BaseEnv):
         if self.traj_dest and is_obj_placed:
             # save dictionary with poses at times to traj dest
             # look into saving as a .npy file
-            with open(self.traj_dest + "/poses.npy", 'w') as f:
-                np.save(np.array(robot_pos))
+            with open(self.traj_dest + "/poses.npy", 'wb') as f:
+                np.save(f, np.array(self.robot_pos))
 
-            with open(self.traj_dest + "/rotations.npy", 'w') as f:
-                np.save(np.array(robot_rot))
+            with open(self.traj_dest + "/rotations.npy", 'wb') as f:
+                np.save(f, np.array(self.robot_rot))
 
         return {
             "success": is_obj_placed,
