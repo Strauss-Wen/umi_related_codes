@@ -63,7 +63,7 @@ class ExpertDemoEnv(BaseEnv):
     goal_radius = 0.1
     cube_half_size = 0.02
 
-    def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
+    def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, save_single_traj=None, **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
@@ -72,10 +72,7 @@ class ExpertDemoEnv(BaseEnv):
         self.cube_aim_position = [0, 0.3, 0.02]
         self.goal_radius = 0.08
         self.env = self
-
-        if traj and os.path.exists(traj):
-            # load cube position, robot positions and rotation
-
+        self.traj_dest = save_single_traj
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         

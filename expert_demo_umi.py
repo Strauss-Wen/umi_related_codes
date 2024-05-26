@@ -197,6 +197,14 @@ class ExpertDemoUMIEnv(BaseEnv):
             with open(self.traj_dest + "/rotations.npy", 'wb') as f:
                 np.save(f, np.array(self.robot_rot))
 
+            with open(self.traj_dest + "/cube_pose.npy", 'wb') as f:
+                np.save(f, self.obj.pose.p[0].detach().cpu().numpy())
+
+            with open(self.traj_dest + "/cube_rot.npy", 'wb') as f:
+                np.save(f, self.obj.pose.q[0].detach().cpu().numpy())
+
+
+
         return {
             "success": is_obj_placed,
         }
