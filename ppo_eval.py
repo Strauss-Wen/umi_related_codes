@@ -211,6 +211,7 @@ if __name__ == "__main__":
                 break
 
         if infos['success'][0]:
+            print("finished a successful trajectory")
             break
 
     envs.close()
