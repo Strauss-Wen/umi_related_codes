@@ -56,47 +56,15 @@ class Args:
     """the id of the environment"""
     total_timesteps: int = 10000000
     """total timesteps of the experiments"""
-    learning_rate: float = 3e-4
-    """the learning rate of the optimizer"""
-    num_envs: int = 512
-    """the number of parallel environments"""
-    num_eval_envs: int = 8
-    """the number of parallel evaluation environments"""
     partial_reset: bool = True
     """toggle if the environments should perform partial resets"""
     num_steps: int = 50
     """the number of steps to run in each environment per policy rollout"""
     num_eval_steps: int = 50
     """the number of steps to run in each evaluation environment during evaluation"""
-    anneal_lr: bool = False
-    """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.8
-    """the discount factor gamma"""
-    gae_lambda: float = 0.9
-    """the lambda for the general advantage estimation"""
-    num_minibatches: int = 32
-    """the number of mini-batches"""
-    update_epochs: int = 4
-    """the K epochs to update the policy"""
-    norm_adv: bool = True
-    """Toggles advantages normalization"""
-    clip_coef: float = 0.2
-    """the surrogate clipping coefficient"""
-    clip_vloss: bool = False
-    """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.0
-    """coefficient of the entropy"""
-    vf_coef: float = 0.5
-    """coefficient of the value function"""
-    max_grad_norm: float = 0.5
-    """the maximum norm for the gradient clipping"""
-    target_kl: float = 0.1
-    """the target KL divergence threshold"""
-    eval_freq: int = 25
-    """evaluation frequency in terms of iterations"""
     save_train_video_freq: Optional[int] = None
     """frequency to save training videos in terms of iterations"""
-    finite_horizon_gae: bool = True
+    num_envs: int = 1
 
     # to be filled in runtime
     batch_size: int = 0
@@ -157,9 +125,7 @@ class Agent(nn.Module):
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
-    args.batch_size = int(args.num_envs * args.num_steps)
-    args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = args.total_timesteps
     if args.exp_name is None:
         args.exp_name = os.path.basename(__file__)[: -len(".py")]
         run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -180,7 +146,7 @@ if __name__ == "__main__":
     # env setup
     # switch render mode between rgb_array and human
     env_kwargs = dict(obs_mode="state", control_mode="pd_joint_delta_pos", render_mode="rgb_array", sim_backend="gpu")
-    envs = gym.make(args.env_id, num_envs=args.num_envs if not args.evaluate else 1, **env_kwargs)
+    envs = gym.make(args.env_id, num_envs=1, **env_kwargs)
     if isinstance(envs.action_space, gym.spaces.Dict):
         envs = FlattenActionSpaceWrapper(envs)
     if args.capture_video:
@@ -192,11 +158,10 @@ if __name__ == "__main__":
             save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
             envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
         eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
-    envs = ManiSkillVectorEnv(envs, args.num_envs, ignore_terminations=not args.partial_reset, **env_kwargs)
+    envs = ManiSkillVectorEnv(envs, 1, ignore_terminations=not args.partial_reset, **env_kwargs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     agent = Agent(envs).to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
@@ -214,10 +179,6 @@ if __name__ == "__main__":
     eps_returns = torch.zeros(args.num_envs, dtype=torch.float, device=device)
     eps_lens = np.zeros(args.num_envs)
     place_rew = torch.zeros(args.num_envs, device=device)
-    print(f"####")
-    print(f"args.num_iterations={args.num_iterations} args.num_envs={args.num_envs}")
-    print(f"args.minibatch_size={args.minibatch_size} args.batch_size={args.batch_size} args.update_epochs={args.update_epochs}")
-    print(f"####")
     action_space_low, action_space_high = torch.from_numpy(envs.single_action_space.low).to(device), torch.from_numpy(envs.single_action_space.high).to(device)
     def clip_action(action: torch.Tensor):
         return torch.clamp(action.detach(), action_space_low, action_space_high)
@@ -245,8 +206,11 @@ if __name__ == "__main__":
             next_obs, reward, terminations, truncations, infos = envs.step(clip_action(action))
             next_done = torch.logical_or(terminations, truncations).to(torch.float32)
             rewards[step] = reward.view(-1)
-
-            if next_done:
+            
+            if infos['success'][0]:
                 break
+
+        if infos['success'][0]:
+            break
 
     envs.close()

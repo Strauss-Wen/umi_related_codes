@@ -16,6 +16,7 @@ See comments for how to make your own environment and what each required functio
 """
 
 from typing import Any, Dict, Union
+import os
 
 import numpy as np
 import torch
@@ -72,10 +73,11 @@ class ExpertDemoUMIEnv(BaseEnv):
         self.cube_aim_position = [0, 0.3, 0.02]
         self.goal_radius = 0.08
         self.env = self
+
         self.traj_dest = save_single_traj
         if self.traj_dest:
-            with open(self.traj_dest, "w") as f:
-                print(f"File: {self.traj_dest} has been created")
+            os.makedirs(self.traj_dest, exist_ok = True)
+            print(f"File: {self.traj_dest} has been created")
 
         self.robot_pos = []
         self.robot_rot = []
@@ -142,6 +144,8 @@ class ExpertDemoUMIEnv(BaseEnv):
         # self._hidden_objects.append(self.goal_region)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
+        self.robot_pos = []
+        self.robot_rot = []
         # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
         with torch.device(self.device):
             # the initialization functions where you as a user place all the objects and initialize their properties
