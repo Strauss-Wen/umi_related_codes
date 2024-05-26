@@ -35,8 +35,8 @@ from mani_skill.utils.structs import Pose
 from mani_skill.utils.structs.types import Array, GPUMemoryConfig, SimConfig
 from mani_skill.utils.building.ground import build_ground
 
-@register_env("ExpertDemo-v1", max_episode_steps=50)
-class ExpertDemoEnv(BaseEnv):
+@register_env("ExpertDemoUMI-v1", max_episode_steps=50)
+class ExpertDemoUMIEnv(BaseEnv):
     """
     Task Description
     ----------------
@@ -63,7 +63,7 @@ class ExpertDemoEnv(BaseEnv):
     goal_radius = 0.1
     cube_half_size = 0.02
 
-    def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, save_single_traj=None, **kwargs):
+    def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, save_single_traj="./robot_traj", **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
@@ -73,6 +73,12 @@ class ExpertDemoEnv(BaseEnv):
         self.goal_radius = 0.08
         self.env = self
         self.traj_dest = save_single_traj
+        if self.traj_dest:
+            with open(self.traj_dest, "w") as f:
+                print(f"File: {self.traj_dest} has been created")
+
+        self.robot_pos = []
+        self.robot_rot = []
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         
@@ -178,9 +184,14 @@ class ExpertDemoEnv(BaseEnv):
             < self.goal_radius
         )
 
-        if self.traj_dest:
+        if self.traj_dest and is_obj_placed:
             # save dictionary with poses at times to traj dest
             # look into saving as a .npy file
+            with open(self.traj_dest + "/poses.npy", 'w') as f:
+                np.save(np.array(robot_pos))
+
+            with open(self.traj_dest + "/rotations.npy", 'w') as f:
+                np.save(np.array(robot_rot))
 
         return {
             "success": is_obj_placed,
@@ -207,11 +218,12 @@ class ExpertDemoEnv(BaseEnv):
 
         # the pose of the agent
         # self.env.agent.robot.pose.p
+        # check dimensions
         if self.traj_dest:
             cur_pose = self.env.agent.robot.pose.p[0]
             cur_rot = self.env.agent.robot.pose.q[0]
-            # save both to self.traj_dest in some way
-            # i.e. store in some global dictionary then when trajectory is success save
+            self.robot_pos.append(cur_pose.detach().cpu().numpy())
+            self.robot_rot.append(cur_rot.detach().cpu().numpy())
 
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(

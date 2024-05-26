@@ -178,10 +178,6 @@ class ExpertDemoEnv(BaseEnv):
             < self.goal_radius
         )
 
-        if self.traj_dest:
-            # save dictionary with poses at times to traj dest
-            # look into saving as a .npy file
-
         return {
             "success": is_obj_placed,
         }
