@@ -75,7 +75,11 @@ class ExpertDemoEnv(BaseEnv):
 
         if traj and os.path.exists(traj):
             # load cube position, robot positions and rotation
-
+            # cube_pose.npy  cube_rot.npy  poses.npy  rotations.npy
+            self.cube_pose = np.load('cube_pose.npy')
+            self.cube_rot = np.load('cube_rot.npy')
+            self.rob_pose = np.load('poses.npy')
+            self.rob_rot = np.load('rotations.npy')
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         
@@ -158,7 +162,7 @@ class ExpertDemoEnv(BaseEnv):
             # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
             # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
-            obj_pose = Pose.create_from_pq(p=xyz, q=q)
+            obj_pose = Pose.create_from_pq(p=self.cube_pose, q=self.cube_rot)
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot

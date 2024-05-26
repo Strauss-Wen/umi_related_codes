@@ -81,6 +81,8 @@ class ExpertDemoUMIEnv(BaseEnv):
 
         self.robot_pos = []
         self.robot_rot = []
+        self.cube_pos = []
+        self.cube_rot = []
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         
@@ -198,12 +200,10 @@ class ExpertDemoUMIEnv(BaseEnv):
                 np.save(f, np.array(self.robot_rot))
 
             with open(self.traj_dest + "/cube_pose.npy", 'wb') as f:
-                np.save(f, self.obj.pose.p[0].detach().cpu().numpy())
+                np.save(f, np.array(self.cube_pos))
 
             with open(self.traj_dest + "/cube_rot.npy", 'wb') as f:
-                np.save(f, self.obj.pose.q[0].detach().cpu().numpy())
-
-
+                np.save(f, np.array(self.cube_rot))
 
         return {
             "success": is_obj_placed,
@@ -234,8 +234,13 @@ class ExpertDemoUMIEnv(BaseEnv):
         if self.traj_dest:
             cur_pose = self.env.agent.robot.pose.p[0]
             cur_rot = self.env.agent.robot.pose.q[0]
+
             self.robot_pos.append(cur_pose.detach().cpu().numpy())
             self.robot_rot.append(cur_rot.detach().cpu().numpy())
+
+            # save full cube trajectory, we will use initial position here as initial position when copying
+            self.cube_pos.append(self.obj.pose.p[0].detach().cpu().numpy())
+            self.cube_rot.append(self.obj.pose.q[0].detach().cpu().numpy())
 
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
