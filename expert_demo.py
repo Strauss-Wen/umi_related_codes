@@ -182,7 +182,7 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pos[self.env.elapsed_steps[0],:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pos[-1,:2], axis=1
             )
             < self.goal_radius
         )
@@ -225,13 +225,20 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_aim_position[:,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pos[self.env.elapsed_steps[0],:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
 
-        # assign rewards to parallel environments that achieved success to the maximum of 3.
-        reward[info["success"]] = 3
+        # finally assign a reward based on the robot arm position
+        robot_to_path_dist = torch.linalg.norm(
+                self.agent.tcp.pose.p - self.rob_pose[self.env.elapsed_steps[0]], axis=1
+        )
+        reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
+        reward += reaching_reward
+
+        # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
+        reward[info["success"]] = 4
         return reward
 
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):

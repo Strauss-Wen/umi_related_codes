@@ -231,11 +231,11 @@ class ExpertDemoUMIEnv(BaseEnv):
         # TODO: take rotation into account with reward function as well as specific object size
 
         # the pose of the agent
-        # self.env.agent.robot.pose.p
+        # use self.env.agent.tcp.pose.p and q since we care about the EE center point
         # check dimensions
         if self.traj_dest:
-            cur_pose = self.env.agent.robot.pose.p[0]
-            cur_rot = self.env.agent.robot.pose.q[0]
+            cur_pose = self.env.agent.tcp.pose.p[0]
+            cur_rot = self.env.agent.tcp.pose.q[0]
 
             self.robot_pos.append(cur_pose.detach().cpu().numpy())
             self.robot_rot.append(cur_rot.detach().cpu().numpy())
