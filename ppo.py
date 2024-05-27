@@ -52,7 +52,7 @@ class Args:
     """path to a pretrained checkpoint file to start evaluation/training from"""
 
     # Algorithm specific arguments
-    env_id: str = "ExpertDemo-v1"
+    env_id: str = "ExpertDemo-v2"
     """the id of the environment"""
     total_timesteps: int = 10000000
     """total timesteps of the experiments"""

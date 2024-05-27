@@ -16,6 +16,7 @@ See comments for how to make your own environment and what each required functio
 """
 
 from typing import Any, Dict, Union
+import os
 
 import numpy as np
 import torch
@@ -35,7 +36,7 @@ from mani_skill.utils.structs import Pose
 from mani_skill.utils.structs.types import Array, GPUMemoryConfig, SimConfig
 from mani_skill.utils.building.ground import build_ground
 
-@register_env("ExpertDemo-v1", max_episode_steps=50)
+@register_env("ExpertDemo-v2", max_episode_steps=50)
 class ExpertDemoEnv(BaseEnv):
     """
     Task Description
@@ -76,10 +77,10 @@ class ExpertDemoEnv(BaseEnv):
         if traj and os.path.exists(traj):
             # load cube position, robot positions and rotation
             # cube_pose.npy  cube_rot.npy  poses.npy  rotations.npy
-            self.cube_pose = np.load('cube_pose.npy')
-            self.cube_rot = np.load('cube_rot.npy')
-            self.rob_pose = np.load('poses.npy')
-            self.rob_rot = np.load('rotations.npy')
+            self.cube_pose = np.load(traj+'/cube_pose.npy')
+            self.cube_rot = np.load(traj+'/cube_rot.npy')
+            self.rob_pose = np.load(traj+'/poses.npy')
+            self.rob_rot = np.load(traj+'/rotations.npy')
 
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
         
@@ -182,7 +183,7 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pos[-1,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[-1,:2], axis=1
             )
             < self.goal_radius
         )
@@ -225,7 +226,7 @@ class ExpertDemoEnv(BaseEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pos[self.env.elapsed_steps[0],:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[self.env.elapsed_steps[0],:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
