@@ -118,6 +118,10 @@ class ExpertDemoEnv(BaseEnv):
             "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
         )
 
+    # fits pose trajectory arrays to correct dimension
+    def fit_dim(self, poses):
+        return torch.stack([torch.from_numpy(i).unsqueeze(dim=0).repeat((self.obj._num_objs, 1)) for i in poses]).to(self.device)
+
     def _load_scene(self, options: dict):
         # note: we dont need a table here
         # we just place our objects on the ground
@@ -137,8 +141,12 @@ class ExpertDemoEnv(BaseEnv):
         with torch.device(self.device):
             self.cube_aim_position = torch.unsqueeze(torch.tensor(self.cube_aim_position), dim=0)
             self.cube_aim_position = self.cube_aim_position.repeat((self.obj._num_objs, 1))
-            import pdb; pdb.set_trace()
-            self.rob_pose = torch.tensor([torch.from_numpy(i) for i in self.rob_pose])
+
+            # move trajectories to device and format them
+            self.rob_pose = self.fit_dim(self.rob_pose)
+            self.rob_rot = self.fit_dim(self.rob_rot)
+            self.cube_pose = self.fit_dim(self.cube_pose)
+            self.cube_rot = self.fit_dim(self.cube_rot)
 
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
@@ -186,7 +194,7 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[-1,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
             )
             < self.goal_radius
         )
@@ -224,12 +232,25 @@ class ExpertDemoEnv(BaseEnv):
         reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
         reward = reaching_reward
 
+        # see if cube is at final position
+        reached = tcp_to_push_pose_dist < 0.01
+        obj_to_goal_dist = torch.linalg.norm(
+                self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
+        )
+        place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
+        reward += place_reward * reached
+
+        # return now if we cant copy demo anymore
+        if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]:
+            reward[info["success"]] = 4
+            return reward
+
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[self.env.elapsed_steps[0],:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[self.env.elapsed_steps[0],:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
@@ -242,7 +263,7 @@ class ExpertDemoEnv(BaseEnv):
         reward += reaching_reward
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
-        reward[info["success"]] = 4
+        reward[info["success"]] = 5
         return reward
 
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):
