@@ -174,7 +174,7 @@ class ExpertDemoEnv(BaseEnv):
             # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
             # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
-            obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) # set initial cube pose to match trajectory start
+            obj_pose = Pose.create_from_pq(p=self.cube_pose[0][0], q=self.cube_rot[0][0]) # set initial cube pose to match trajectory start
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot
