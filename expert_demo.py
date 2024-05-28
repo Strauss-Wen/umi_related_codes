@@ -25,7 +25,7 @@ import sapien
 import sapien.render
 from transforms3d.euler import euler2quat
 
-from mani_skill.agents.robots import Fetch, Panda, Xmate3Robotiq
+from mani_skill.agents.robots import Fetch, Panda, Xmate3Robotiq, XArm7Ability
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import common, sapien_utils
@@ -55,16 +55,16 @@ class ExpertDemoEnv(BaseEnv):
     Visualization: https://maniskill.readthedocs.io/en/latest/tasks/index.html#pushcube-v1
     """
 
-    SUPPORTED_ROBOTS = ["panda", "xmate3_robotiq", "fetch"]
+    SUPPORTED_ROBOTS = ["panda", "xmate3_robotiq", "fetch", "xarm7_ability"]
 
     # Specify some supported robot types
-    agent: Union[Panda, Xmate3Robotiq, Fetch]
+    agent: Union[Panda, Xmate3Robotiq, Fetch, XArm7Ability]
 
     # set some commonly used values
     goal_radius = 0.1
     cube_half_size = 0.02
 
-    def __init__(self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
+    def __init__(self, *args, robot_uids="xarm7_ability", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
@@ -177,7 +177,8 @@ class ExpertDemoEnv(BaseEnv):
             obj_pose = Pose.create_from_pq(p=self.cube_pose[0][0], q=self.cube_rot[0][0]) # set initial cube pose to match trajectory start
             self.obj.set_pose(obj_pose)
 
-            # finally set the qpos of the robot
+            # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
+            '''
             qpos = (
                 self.env._episode_rng.normal(
                     0, self.robot_init_qpos_noise, (b, len(self.init_qpos))
@@ -187,6 +188,7 @@ class ExpertDemoEnv(BaseEnv):
 
             self.env.agent.reset(qpos)
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
+            '''
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
