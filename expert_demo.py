@@ -244,10 +244,17 @@ class ExpertDemoEnv(BaseEnv):
 
         # return now if we cant copy demo anymore
         if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]:
-            reward[info["success"]] = 4
+            reward[info["success"]] = 5
             return reward
 
-        # compute a placement reward to encourage robot to move the cube to the center of the goal region
+        # to measure distance between quaternions: first normalize each quaternion, then
+        # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
+        # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
+
+        if torch.any(torch.isnan(reward)):
+            import pdb; pdb.set_trace()
+
+       # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_push_pose_dist < 0.01
@@ -256,13 +263,16 @@ class ExpertDemoEnv(BaseEnv):
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
-
+        
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
                 self.agent.tcp.pose.p - self.rob_pose[self.env.elapsed_steps[0]], axis=1
         )
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
+
+        if torch.any(torch.isnan(reward)):
+            import pdb; pdb.set_trace()
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = 5
