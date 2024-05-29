@@ -25,7 +25,7 @@ import sapien
 import sapien.render
 from transforms3d.euler import euler2quat
 
-from xarm7.sapien_xarm7 import XArm7
+from xarm7.xarm7 import XArm7
 from mani_skill.agents.robots import Fetch, Panda, Xmate3Robotiq, XArm7Ability
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
@@ -65,7 +65,7 @@ class ExpertDemoEnv(BaseEnv):
     goal_radius = 0.1
     cube_half_size = 0.02
 
-    def __init__(self, *args, robot_uids="xarm7_ability", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
+    def __init__(self, *args, robot_uids="xarm7", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
@@ -83,8 +83,7 @@ class ExpertDemoEnv(BaseEnv):
             self.rob_pose = np.load(traj+'/poses.npy')
             self.rob_rot = np.load(traj+'/rotations.npy')
 
-        self.xarm = XArm7()
-        super().__init__(*args, robot_uids="panda", **kwargs) # robot_uids = robot_uids
+        super().__init__(*args, robot_uids=robot_uids, **kwargs) # robot_uids = robot_uids
         
     # Specify default simulation/gpu memory configurations to override any default values
     @property
@@ -128,9 +127,6 @@ class ExpertDemoEnv(BaseEnv):
         # note: we dont need a table here
         # we just place our objects on the ground
         self.ground = build_ground(self.scene)
-
-        # load the robot arm
-        self.xarm.load(self.scene)
 
         # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
         # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
