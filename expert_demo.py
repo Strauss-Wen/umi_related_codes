@@ -25,6 +25,7 @@ import sapien
 import sapien.render
 from transforms3d.euler import euler2quat
 
+from xarm7.sapien_xarm7 import XArm7
 from mani_skill.agents.robots import Fetch, Panda, Xmate3Robotiq, XArm7Ability
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
@@ -55,7 +56,7 @@ class ExpertDemoEnv(BaseEnv):
     Visualization: https://maniskill.readthedocs.io/en/latest/tasks/index.html#pushcube-v1
     """
 
-    SUPPORTED_ROBOTS = ["panda", "xmate3_robotiq", "fetch", "xarm7_ability"]
+    SUPPORTED_ROBOTS = None # ["panda", "xmate3_robotiq", "fetch", "xarm7_ability", "xarm7"]
 
     # Specify some supported robot types
     agent: Union[Panda, Xmate3Robotiq, Fetch, XArm7Ability]
@@ -82,7 +83,8 @@ class ExpertDemoEnv(BaseEnv):
             self.rob_pose = np.load(traj+'/poses.npy')
             self.rob_rot = np.load(traj+'/rotations.npy')
 
-        super().__init__(*args, robot_uids=robot_uids, **kwargs)
+        self.xarm = XArm7()
+        super().__init__(*args, **kwargs) # robot_uids = robot_uids
         
     # Specify default simulation/gpu memory configurations to override any default values
     @property
@@ -126,6 +128,9 @@ class ExpertDemoEnv(BaseEnv):
         # note: we dont need a table here
         # we just place our objects on the ground
         self.ground = build_ground(self.scene)
+
+        # load the robot arm
+        self.xarm.load(self.scene)
 
         # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
         # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
