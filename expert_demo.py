@@ -56,7 +56,7 @@ class ExpertDemoEnv(BaseEnv):
     Visualization: https://maniskill.readthedocs.io/en/latest/tasks/index.html#pushcube-v1
     """
 
-    SUPPORTED_ROBOTS = None # ["panda", "xmate3_robotiq", "fetch", "xarm7_ability", "xarm7"]
+    SUPPORTED_ROBOTS = ["panda", "xmate3_robotiq", "fetch", "xarm7_ability", "xarm7"]
 
     # Specify some supported robot types
     agent: Union[Panda, Xmate3Robotiq, Fetch, XArm7Ability]
@@ -84,7 +84,7 @@ class ExpertDemoEnv(BaseEnv):
             self.rob_rot = np.load(traj+'/rotations.npy')
 
         self.xarm = XArm7()
-        super().__init__(*args, **kwargs) # robot_uids = robot_uids
+        super().__init__(*args, robot_uids="panda", **kwargs) # robot_uids = robot_uids
         
     # Specify default simulation/gpu memory configurations to override any default values
     @property
