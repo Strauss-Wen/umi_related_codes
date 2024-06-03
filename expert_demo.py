@@ -188,8 +188,8 @@ class ExpertDemoEnv(BaseEnv):
             )
 
             self.env.agent.reset(qpos)
-            self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
             '''
+            self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
@@ -241,7 +241,7 @@ class ExpertDemoEnv(BaseEnv):
                 self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached
+        reward = place_reward * reached # initially was +=, now ignoring the reaching reward
 
         # return now if we cant copy demo anymore
         if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]:
@@ -255,9 +255,10 @@ class ExpertDemoEnv(BaseEnv):
         if torch.any(torch.isnan(reward)):
             import pdb; pdb.set_trace()
 
-       # compute a placement reward to encourage robot to move the cube to the center of the goal region
+        # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
         # This reward design helps train RL agents faster by staging the reward out.
+        # TODO: maybe give n steps before agent has to start copying the teacher
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
                 self.obj.pose.p[..., :2] - self.cube_pose[self.env.elapsed_steps[0],:,:2], axis=1
@@ -281,5 +282,5 @@ class ExpertDemoEnv(BaseEnv):
 
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):
         # this should be equal to compute_dense_reward / max possible reward
-        max_reward = 3.0
+        max_reward = 5.0
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
