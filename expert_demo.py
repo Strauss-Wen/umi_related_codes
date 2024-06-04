@@ -220,15 +220,15 @@ class ExpertDemoEnv(BaseEnv):
             obs.update(
                 goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
-                step=self.elapsed_steps[0].repeat((self.obj.pose.raw_pose.shape[0], 1)) # since we have conditioning
+                step=self.elapsed_steps
             )
+            # step=self.elapsed_steps[0].repeat((self.obj.pose.raw_pose.shape[0], 1)) # since we have conditioning
         return obs
 
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
 
-        import pdb; pdb.set_trace()
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
             p=self.obj.pose.p
@@ -258,7 +258,8 @@ class ExpertDemoEnv(BaseEnv):
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
-        q_loss = torch.bmm(self.rob_rot[cur_step,:,:].unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze(-1)
+        q_loss = torch.bmm(self.rob_rot[cur_step,:,:].unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
+        reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
@@ -269,7 +270,7 @@ class ExpertDemoEnv(BaseEnv):
                 self.obj.pose.p[..., :2] - self.cube_pose[cur_step,:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward = place_reward * reached
+        reward += place_reward * reached
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
