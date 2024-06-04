@@ -74,6 +74,8 @@ class ExpertDemoEnv(BaseEnv):
         self.cube_aim_position = [0, 0.3, 0.02]
         self.goal_radius = 0.08
         self.env = self
+        self.max_reward = 3
+        self.cur_step = 0
 
         if traj and os.path.exists(traj):
             # load cube position, robot positions and rotation
@@ -218,6 +220,7 @@ class ExpertDemoEnv(BaseEnv):
             obs.update(
                 goal_pos=self.cube_aim_position,
                 obj_pose=self.obj.pose.raw_pose,
+                step=self.elapsed_steps[0].repeat((self.obj.pose.raw_pose.shape[0], 1)) # since we have conditioning
             )
         return obs
 
@@ -225,6 +228,7 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
 
+        import pdb; pdb.set_trace()
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
             p=self.obj.pose.p
@@ -232,6 +236,7 @@ class ExpertDemoEnv(BaseEnv):
         )
         tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
         tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
+        '''
         reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
         reward = reaching_reward
 
@@ -241,19 +246,19 @@ class ExpertDemoEnv(BaseEnv):
                 self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward = place_reward * reached # initially was +=, now ignoring the reaching reward
+        reward += place_reward * reached # initially was +=, now ignoring the reaching reward
+        '''
 
         # return now if we cant copy demo anymore
-        if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]:
-            reward[info["success"]] = 5
-            return reward
+        if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
+            cur_step = -1
+        else:
+            cur_step = self.env.elapsed_steps[0]
 
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
-
-        if torch.any(torch.isnan(reward)):
-            import pdb; pdb.set_trace()
+        q_loss = torch.bmm(self.rob_rot[cur_step,:,:].unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze(-1)
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
@@ -261,14 +266,14 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: maybe give n steps before agent has to start copying the teacher
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[self.env.elapsed_steps[0],:,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[cur_step,:,:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached
+        reward = place_reward * reached
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
-                self.agent.tcp.pose.p - self.rob_pose[self.env.elapsed_steps[0]], axis=1
+                self.agent.tcp.pose.p - self.rob_pose[cur_step], axis=1
         )
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
@@ -277,10 +282,10 @@ class ExpertDemoEnv(BaseEnv):
             import pdb; pdb.set_trace()
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
-        reward[info["success"]] = 5
+        reward[info["success"]] = self.max_reward
         return reward
 
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):
         # this should be equal to compute_dense_reward / max possible reward
-        max_reward = 5.0
+        max_reward = self.max_reward
         return self.compute_dense_reward(obs=obs, action=action, info=info) / max_reward
