@@ -146,6 +146,11 @@ class ExpertDemoEnv(BaseEnv):
             self.cube_aim_position = self.cube_aim_position.repeat((self.obj._num_objs, 1))
 
             # move trajectories to device and format them
+            self.rob_pose = torch.from_numpy(self.rob_pose).to(self.device)
+            self.rob_rot = torch.from_numpy(self.rob_rot).to(self.device)
+            self.cube_pose = torch.from_numpy(self.cube_pose).to(self.device)
+            self.cube_rot = torch.from_numpy(self.cube_rot).to(self.device)
+            # self.rob_pose = torch.stack([torch.from_numpy(self.rob_pose)])
             '''
             self.rob_pose = self.fit_dim(self.rob_pose)
             self.rob_rot = self.fit_dim(self.rob_rot)
@@ -179,7 +184,7 @@ class ExpertDemoEnv(BaseEnv):
             # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
             # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
-            obj_pose = Pose.create_from_pq(p=self.cube_pose[0][0], q=self.cube_rot[0][0]) # set initial cube pose to match trajectory start
+            obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) # set initial cube pose to match trajectory start
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
@@ -203,7 +208,7 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
+                self.obj.pose.p[..., :2] - self.cube_pose[-1,:2], axis=1
             )
             < self.goal_radius
         )
@@ -265,11 +270,8 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
-                if torch.any(torch.isnan(reward)):
-            import pdb; pdb.set_trace()
-        
         # set env step to the argmax for reward
-        max_step = self.env_step.detach.clone()
+        max_step = self.env_step.detach().clone()
 
         for i in range(0, self.rob_rot.shape[0]):
             reward = self.traj_reward(self.env_step+i, tcp_to_push_pose_dist)
@@ -293,7 +295,7 @@ class ExpertDemoEnv(BaseEnv):
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
-        q_loss = torch.bmm(self.filter(self.rob_rot, steps).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
+        q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
         reward = q_loss**2
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
@@ -302,14 +304,14 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: maybe give n steps before agent has to start copying the teacher
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.filter(self.cube_pose, steps)[...:2], axis=1
+                self.obj.pose.p[..., :2] - self.filter(steps, self.cube_pose)[..., :2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
-                self.agent.tcp.pose.p - self.filter(self.rob_pose, steps), axis=1
+                self.agent.tcp.pose.p - self.filter(steps, self.rob_pose), axis=1
         )
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
