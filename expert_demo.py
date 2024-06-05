@@ -146,10 +146,12 @@ class ExpertDemoEnv(BaseEnv):
             self.cube_aim_position = self.cube_aim_position.repeat((self.obj._num_objs, 1))
 
             # move trajectories to device and format them
+            '''
             self.rob_pose = self.fit_dim(self.rob_pose)
             self.rob_rot = self.fit_dim(self.rob_rot)
             self.cube_pose = self.fit_dim(self.cube_pose)
             self.cube_rot = self.fit_dim(self.cube_rot)
+            '''
 
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
@@ -193,6 +195,8 @@ class ExpertDemoEnv(BaseEnv):
             '''
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
+            # self.env.elapsed_steps
+
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
         # use self.env.elapsed_steps to get the index of correct robot and cube position
@@ -224,6 +228,12 @@ class ExpertDemoEnv(BaseEnv):
             )
             # step=self.elapsed_steps[0].repeat((self.obj.pose.raw_pose.shape[0], 1)) # since we have conditioning
         return obs
+
+    # select the correct value in the traj
+    def filter(self, env_steps, traj):
+        to_stack = [traj[i if i < traj.shape[0] else -1] for i in env_steps]
+
+        return torch.stack(to_stack)
 
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
