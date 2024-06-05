@@ -75,7 +75,7 @@ class ExpertDemoEnv(BaseEnv):
         self.goal_radius = 0.08
         self.env = self
         self.max_reward = 3
-        self.cur_step = 0
+        self.env_step = None
 
         if traj and os.path.exists(traj):
             # load cube position, robot positions and rotation
@@ -195,7 +195,7 @@ class ExpertDemoEnv(BaseEnv):
             '''
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
-            # self.env.elapsed_steps
+            self.env_step = self.env.elapsed_steps.detach().clone()
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
@@ -265,10 +265,35 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
+                if torch.any(torch.isnan(reward)):
+            import pdb; pdb.set_trace()
+        
+        # set env step to the argmax for reward
+        max_step = self.env_step.detach.clone()
+
+        for i in range(0, self.rob_rot.shape[0]):
+            reward = self.traj_reward(self.env_step+i, tcp_to_push_pose_dist)
+            max_reward = self.traj_reward(max_step, tcp_to_push_pose_dist)
+            for j in range (0, len(reward)):
+                if reward[j] > max_reward[j]:
+                    max_step[j] += i
+
+        reward = self.traj_reward(max_step, tcp_to_push_pose_dist)
+        for i in range (0, len(self.env_step)):
+            if self.env_step[i] == self.rob_rot.shape[0] - 1:
+                reward[i] = 0
+
+        self.env_step = max_step
+
+        # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
+        reward[info["success"]] = self.max_reward
+        return reward
+
+    def traj_reward(self, steps, tcp_to_push_pose_dist): # steps are the set of steps for each trajectory
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
-        q_loss = torch.bmm(self.rob_rot[cur_step,:,:].unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
+        q_loss = torch.bmm(self.filter(self.rob_rot, steps).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
         reward = q_loss**2
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
@@ -277,23 +302,18 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: maybe give n steps before agent has to start copying the teacher
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[cur_step,:,:2], axis=1
+                self.obj.pose.p[..., :2] - self.filter(self.cube_pose, steps)[...:2], axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
-                self.agent.tcp.pose.p - self.rob_pose[cur_step], axis=1
+                self.agent.tcp.pose.p - self.filter(self.rob_pose, steps), axis=1
         )
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
 
-        if torch.any(torch.isnan(reward)):
-            import pdb; pdb.set_trace()
-
-        # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
-        reward[info["success"]] = self.max_reward
         return reward
 
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):
