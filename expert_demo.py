@@ -76,6 +76,7 @@ class ExpertDemoEnv(BaseEnv):
         self.env = self
         self.max_reward = 3
         self.env_step = None
+        self.last = None
 
         if traj and os.path.exists(traj):
             # load cube position, robot positions and rotation
@@ -201,6 +202,7 @@ class ExpertDemoEnv(BaseEnv):
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
             self.env_step = self.env.elapsed_steps.detach().clone()
+            self.last = torch.zeros_like(self.env_step).to(self.device) - 1
 
     def evaluate(self):
         # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
@@ -213,8 +215,14 @@ class ExpertDemoEnv(BaseEnv):
             < self.goal_radius
         )
 
+        
+        is_pose_same = torch.logical_and(
+            torch.linalg.norm(self.agent.tcp.pose.p - self.filter(self.last, self.rob_pose), axis=1) < self.goal_radius,
+            self.env_step >= self.rob_pose.shape[0]
+        )
+
         return {
-            "success": is_obj_placed,
+            "success": is_pose_same,
         }
 
     def _get_obs_extra(self, info: Dict):
@@ -251,7 +259,7 @@ class ExpertDemoEnv(BaseEnv):
         )
         tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
         tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
-
+        '''
         reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
         reward = reaching_reward
 
@@ -262,6 +270,7 @@ class ExpertDemoEnv(BaseEnv):
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached # initially was +=, now ignoring the reaching reward
+        '''
 
         # return now if we cant copy demo anymore
         if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
@@ -269,7 +278,6 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
-        '''
         # set env step to the argmax for reward
         max_step = self.env_step.detach().clone()
 
@@ -286,9 +294,6 @@ class ExpertDemoEnv(BaseEnv):
                 reward[i] = 0
 
         self.env_step = max_step
-        '''
-        self.env_step += 1
-        reward += self.traj_reward(self.env_step, tcp_to_push_pose_dist)
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = self.max_reward
