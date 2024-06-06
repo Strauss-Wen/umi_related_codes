@@ -251,7 +251,7 @@ class ExpertDemoEnv(BaseEnv):
         )
         tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
         tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
-        '''
+
         reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
         reward = reaching_reward
 
@@ -262,7 +262,6 @@ class ExpertDemoEnv(BaseEnv):
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached # initially was +=, now ignoring the reaching reward
-        '''
 
         # return now if we cant copy demo anymore
         if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
@@ -270,6 +269,7 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
+        '''
         # set env step to the argmax for reward
         max_step = self.env_step.detach().clone()
 
@@ -286,6 +286,9 @@ class ExpertDemoEnv(BaseEnv):
                 reward[i] = 0
 
         self.env_step = max_step
+        '''
+        self.env_step += 1
+        reward += self.traj_reward(self.env_step, tcp_to_push_pose_dist)
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = self.max_reward
