@@ -304,6 +304,7 @@ class ExpertDemoEnv(BaseEnv):
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
         q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
+        import pdb; pdb.set_trace()
         reward = q_loss**2
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
