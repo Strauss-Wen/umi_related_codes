@@ -248,6 +248,7 @@ class ExpertDemoEnv(BaseEnv):
 
         return torch.stack(to_stack)
 
+
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
@@ -278,34 +279,24 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
-        # set env step to the argmax for reward
-        max_step = self.env_step.detach().clone()
-
-        for i in range(0, self.rob_rot.shape[0]):
-            reward = self.traj_reward(self.env_step+i, tcp_to_push_pose_dist)
-            max_reward = self.traj_reward(max_step, tcp_to_push_pose_dist)
-            for j in range (0, len(reward)):
-                if reward[j] > max_reward[j]:
-                    max_step[j] += i
-
-        reward = self.traj_reward(max_step, tcp_to_push_pose_dist)
-        for i in range (0, len(self.env_step)):
-            if self.env_step[i] == self.rob_rot.shape[0] - 1:
-                reward[i] = 0
-
-        self.env_step = max_step
+        all_rewards = self.traj_reward(tcp_to_push_pose_dist).to(self.device)
+        mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
+        mask = self.env_step.unsqueeze(1) < mask_range
+        max_step = torch.max(torch.where(mask, all_rewards, -1 * (self.max_reward + 1)), axis=1)
+        self.env_step = max_step.indices
+        reward = max_step.values
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = self.max_reward
         return reward
 
-    def traj_reward(self, steps, tcp_to_push_pose_dist): # steps are the set of steps for each trajectory
+    def traj_reward(self, tcp_to_push_pose_dist): # steps are the set of steps for each trajectory
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
-        q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
-        import pdb; pdb.set_trace()
-        reward = q_loss**2
+        # q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
+        q_loss = self.quat_diff(self.rob_rot, self.obj.pose.q.unsqueeze(1))
+        reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
@@ -313,20 +304,45 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: maybe give n steps before agent has to start copying the teacher
         reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.filter(steps, self.cube_pose)[..., :2], axis=1
+                self.obj.pose.p.unsqueeze(1)[..., :2] - self.cube_pose[..., :2], axis=2
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached
+        reward += place_reward * reached.unsqueeze(1)
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
-                self.agent.tcp.pose.p - self.filter(steps, self.rob_pose), axis=1
+                self.agent.tcp.pose.p.unsqueeze(1) - self.rob_pose, axis=2
         )
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
 
         return reward
 
+    def quat_diff(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """
+        Get the difference in radians between two quaternions.
+
+        Args:
+        a: first quaternion, shape (..., 4)
+        b: second quaternion, shape (..., 4)
+        Returns:
+        Difference in radians, shape (N,)
+        """
+
+        # Normalize the quaternions
+        a = a / torch.norm(a, dim=-1, keepdim=True)
+        b = b / torch.norm(b, dim=-1, keepdim=True)
+
+        # Compute the dot product between the quaternions
+        dot_product = torch.sum(a * b, dim=-1)
+
+        # Clamp the dot product to the range [-1, 1] to avoid numerical instability
+        dot_product = torch.clamp(dot_product, -1.0, 1.0)
+
+        # Compute the angle difference in radians
+        # angle_diff = 2 * torch.acos(torch.abs(dot_product))
+
+        return dot_product**2
     def compute_normalized_dense_reward(self, obs: Any, action: Array, info: Dict):
         # this should be equal to compute_dense_reward / max possible reward
         max_reward = self.max_reward
