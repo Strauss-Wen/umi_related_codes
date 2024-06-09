@@ -215,9 +215,8 @@ class ExpertDemoEnv(BaseEnv):
             < self.goal_radius
         )
 
-        
         is_pose_same = torch.logical_and(
-            torch.linalg.norm(self.agent.tcp.pose.p - self.filter(self.last, self.rob_pose), axis=1) < self.goal_radius,
+            torch.linalg.norm(self.agent.tcp.pose.p - self.rob_pose[-1], axis=1) < self.goal_radius,
             self.env_step >= self.rob_pose.shape[0]
         )
 
@@ -248,7 +247,6 @@ class ExpertDemoEnv(BaseEnv):
 
         return torch.stack(to_stack)
 
-
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
@@ -273,17 +271,11 @@ class ExpertDemoEnv(BaseEnv):
         reward += place_reward * reached # initially was +=, now ignoring the reaching reward
         '''
 
-        # return now if we cant copy demo anymore
-        if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
-            cur_step = -1
-        else:
-            cur_step = self.env.elapsed_steps[0]
-
         all_rewards = self.traj_reward(tcp_to_push_pose_dist).to(self.device)
         mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
-        mask = self.env_step.unsqueeze(1) < mask_range
-        max_step = torch.max(torch.where(mask, all_rewards, -1 * (self.max_reward + 1)), axis=1)
-        self.env_step = max_step.indices
+        mask = self.env_step.unsqueeze(1) <= mask_range
+        max_step = torch.max(torch.where(mask, all_rewards, 0), axis=1)
+        self.env_step = max_step.indices + 1
         reward = max_step.values
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
@@ -295,7 +287,7 @@ class ExpertDemoEnv(BaseEnv):
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
         # q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
-        q_loss = self.quat_diff(self.rob_rot, self.obj.pose.q.unsqueeze(1))
+        q_loss = self.quat_diff(self.rob_rot, self.agent.tcp.pose.q.unsqueeze(1))
         reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
