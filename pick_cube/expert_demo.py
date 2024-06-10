@@ -17,6 +17,9 @@ See comments for how to make your own environment and what each required functio
 
 from typing import Any, Dict, Union
 import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.abspath("../xarm7")))
 
 import numpy as np
 import torch
@@ -280,7 +283,7 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
-        all_rewards = self.traj_reward(tcp_to_push_pose_dist).to(self.device)
+        all_rewards = self.traj_reward(tcp_to_push_pose_dist, info).to(self.device)
         mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
         mask = self.env_step.unsqueeze(1) <= mask_range
         max_step = torch.max(torch.where(mask, all_rewards, 0), axis=1)
@@ -291,7 +294,7 @@ class ExpertDemoEnv(BaseEnv):
         reward[info["success"]] = self.max_reward
         return reward
 
-    def traj_reward(self, tcp_to_push_pose_dist): # steps are the set of steps for each trajectory
+    def traj_reward(self, tcp_to_push_pose_dist, info): # steps are the set of steps for each trajectory
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
@@ -317,8 +320,8 @@ class ExpertDemoEnv(BaseEnv):
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
 
-        # also check that we are grasping properly
-        reward += torch.ones_like(reward)*self.rob_grasp
+        # also check that we are grasping properly at our chosen index
+        reward += torch.logical_and(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
 
         return reward
 
