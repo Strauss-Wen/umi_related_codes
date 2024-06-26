@@ -226,7 +226,7 @@ class ExpertDemoEnv(BaseEnv):
         )
 
         return {
-            "success": is_pose_same,
+            "success": torch.logical_and(is_pose_same, ~(self.rob_grasp[-1].item() ^ self.agent.is_grasping(self.obj))),
         }
 
     def _get_obs_extra(self, info: Dict):
@@ -320,8 +320,8 @@ class ExpertDemoEnv(BaseEnv):
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
 
-        # also check that we are grasping properly at our chosen index
-        reward += torch.logical_and(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
+        # also check that we are grasping properly at our chosen index, we want to reward if data and agent state match
+        reward += ~torch.logical_xor(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
 
         return reward
 
