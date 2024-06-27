@@ -203,7 +203,7 @@ class ExpertDemoEnv(BaseEnv):
 
             self.env.agent.reset(qpos)
             '''
-            self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
+            # self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
             self.env_step = self.env.elapsed_steps.detach().clone()
             self.last = torch.zeros_like(self.env_step).to(self.device) - 1
@@ -218,7 +218,6 @@ class ExpertDemoEnv(BaseEnv):
             )
             < self.goal_radius
         )
-
         
         is_pose_same = torch.logical_and(
             torch.linalg.norm(self.agent.tcp.pose.p - self.rob_pose[-1], axis=1) < self.goal_radius,
@@ -252,7 +251,6 @@ class ExpertDemoEnv(BaseEnv):
 
         return torch.stack(to_stack)
 
-
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
@@ -260,8 +258,8 @@ class ExpertDemoEnv(BaseEnv):
         # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
         tcp_push_pose = Pose.create_from_pq(
             p=self.obj.pose.p
-            + torch.tensor([-self.cube_half_size - 0.005, 0, 0], device=self.device)
         )
+        # + torch.tensor([-self.cube_half_size - 0.005, 0, 0], device=self.device)
         tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
         tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
         '''
@@ -311,7 +309,7 @@ class ExpertDemoEnv(BaseEnv):
                 self.obj.pose.p.unsqueeze(1) - self.cube_pose, axis=2
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached.unsqueeze(1)
+        reward += place_reward * self.agent.is_grasping(self.obj).unsqueeze(1)
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
@@ -320,8 +318,12 @@ class ExpertDemoEnv(BaseEnv):
         reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
         reward += reaching_reward
 
+        reward += self.agent.is_grasping(self.obj).unsqueeze(1)*torch.ones_like(reward)
         # also check that we are grasping properly at our chosen index, we want to reward if data and agent state match
-        reward += ~torch.logical_xor(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
+        # reward += ~torch.logical_xor(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
+
+        # try no reward if not grasping object at correct time
+        # reward = ~torch.logical_xor(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*reward
 
         return reward
 
