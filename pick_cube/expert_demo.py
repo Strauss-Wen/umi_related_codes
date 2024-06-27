@@ -224,8 +224,9 @@ class ExpertDemoEnv(BaseEnv):
             self.env_step >= self.rob_pose.shape[0]
         )
 
+        # "success": torch.logical_and(is_pose_same, ~(self.rob_grasp[-1].item() ^ self.agent.is_grasping(self.obj))),
         return {
-            "success": torch.logical_and(is_pose_same, ~(self.rob_grasp[-1].item() ^ self.agent.is_grasping(self.obj))),
+            "success": torch.logical_and(is_pose_same, is_obj_placed),
         }
 
     def _get_obs_extra(self, info: Dict):
