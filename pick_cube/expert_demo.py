@@ -193,7 +193,6 @@ class ExpertDemoEnv(BaseEnv):
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
-            '''
             qpos = (
                 self.env._episode_rng.normal(
                     0, self.robot_init_qpos_noise, (b, len(self.init_qpos))
@@ -202,8 +201,7 @@ class ExpertDemoEnv(BaseEnv):
             )
 
             self.env.agent.reset(qpos)
-            '''
-            # self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
+            self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
 
             self.env_step = self.env.elapsed_steps.detach().clone()
             self.last = torch.zeros_like(self.env_step).to(self.device) - 1

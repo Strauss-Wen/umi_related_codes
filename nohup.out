@@ -1009,3 +1009,13 @@ Setting default value
 Failed to read: session.screen0.titlebar.right
 Setting default value
 (EE) Failed to open authorization file "/tmp/.xas28745661591.AuA1eU": No such file or directory
+/usr/bin/xinit: connection to X server lost
+
+waiting for X server to shut down /usr/bin/xinit: connection to X server lost
+
+waiting for X server to shut down X connection to :20 broken (explicit kill or server shutdown).
+X connection to :21 broken (explicit kill or server shutdown).
+
+/usr/bin/xinit: unexpected signal 1
+
+/usr/bin/xinit: unexpected signal 1
