@@ -193,11 +193,12 @@ class ExpertDemoEnv(BaseEnv):
             self.obj.set_pose(obj_pose)
 
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
+            init_qpos = ([0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2] + [0] * 6)
             qpos = (
                 self.env._episode_rng.normal(
-                    0, self.robot_init_qpos_noise, (b, len(self.init_qpos))
+                    0, self.robot_init_qpos_noise, (b, len(init_qpos))
                 )
-                + self.init_qpos 
+                + init_qpos 
             )
 
             self.env.agent.reset(qpos)
