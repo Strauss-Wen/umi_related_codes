@@ -1,4 +1,4 @@
-name: ppo_ac_pushcube_demo
+name: ppo_demo
 channels:
   - defaults
 dependencies:

@@ -117,7 +117,6 @@ class XArm7(BaseAgent):
         gripper_stiffness = 1e3 # 5e3
         gripper_damping = 1e2 # 10
         gripper_force_limit = 100 # 1e5
-        gripper_joint_names = ["left_outer_knuckle", "right_outer_knuckle"]
         
         gripper_pd_joint_pos = PDJointPosMimicControllerConfig(
             gripper_joint_names,
