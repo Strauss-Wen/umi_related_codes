@@ -1,7 +1,0 @@
-[project]
-name = "sapien_xarm7"
-version = "1.0.0"
-dependencies = ["sapien"]
-
-[tool.setuptools.package-data]
-sapien_xarm7 = ["**"]
