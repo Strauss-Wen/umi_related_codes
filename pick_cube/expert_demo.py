@@ -76,7 +76,7 @@ class ExpertDemoEnv(BaseEnv):
         self.robot_pose = [-0.16, -0.4, 0]
         self.cube_aim_position = [0, 0.3, 0.02]
         self.env = self
-        self.max_reward = 4
+        self.max_reward = 6
         self.env_step = None
         self.last = None
 
@@ -154,12 +154,6 @@ class ExpertDemoEnv(BaseEnv):
             self.cube_pose = torch.from_numpy(self.cube_pose).to(self.device)
             self.cube_rot = torch.from_numpy(self.cube_rot).to(self.device)
             # self.rob_pose = torch.stack([torch.from_numpy(self.rob_pose)])
-            '''
-            self.rob_pose = self.fit_dim(self.rob_pose)
-            self.rob_rot = self.fit_dim(self.rob_rot)
-            self.cube_pose = self.fit_dim(self.cube_pose)
-            self.cube_rot = self.fit_dim(self.cube_rot)
-            '''
 
         # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
@@ -202,6 +196,9 @@ class ExpertDemoEnv(BaseEnv):
 
             self.env.agent.reset(qpos)
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
+            
+            # this may be a better pose to try
+            # self.agent.robot.set_pose(sapien.Pose([-0.415, 0, 0])) 
 
             self.env_step = self.env.elapsed_steps.detach().clone()
             self.last = torch.zeros_like(self.env_step).to(self.device) - 1
@@ -212,7 +209,7 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p - self.cube_pose, axis=1
+                self.obj.pose.p - self.cube_pose[-1], axis=1
             )
             < self.goal_thresh
         )
@@ -223,22 +220,22 @@ class ExpertDemoEnv(BaseEnv):
         )
 
         is_robot_static = self.agent.is_static(0.2)
-        is_grasped = self.agent.is_grasping(self.cube)
+        is_grasping = self.agent.is_grasping(self.obj)
 
         # "success": torch.logical_and(is_pose_same, ~(self.rob_grasp[-1].item() ^ self.agent.is_grasping(self.obj))),
         return {
-            "success": torch.logical_and(is_pose_same, is_obj_placed),
+            "success": is_obj_placed, # torch.logical_and(is_pose_same, is_obj_placed),
             "is_obj_placed": is_obj_placed,
             "is_pose_same": is_pose_same,
             "is_robot_static": is_robot_static,
-            "is_grasped": is_grasped,
+            "is_grasping": is_grasping,
         }
 
     def _get_obs_extra(self, info: Dict):
         # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
         # grippers of the robot
         obs = dict(
-            is_grasped=info["is_grasped"],
+            is_grasping=info["is_grasping"],
             tcp_pose=self.agent.tcp.pose.raw_pose,
         )
         if self._obs_mode in ["state", "state_dict"]:
@@ -256,25 +253,23 @@ class ExpertDemoEnv(BaseEnv):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
         # TODO: take rotation into account with reward function as well as specific object size
 
-        # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
-        tcp_push_pose = Pose.create_from_pq(
-            p=self.obj.pose.p
+        # reward for reaching the object
+        tcp_to_obj_dist = torch.linalg.norm(
+            self.obj.pose.p - self.agent.tcp.pose.p, axis=1
         )
-        # + torch.tensor([-self.cube_half_size - 0.005, 0, 0], device=self.device)
-        tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
-        tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
-        '''
-        reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
-        reward = reaching_reward
+        reaching_reward = 1 - torch.tanh(5 * tcp_to_obj_dist)
 
-        # see if cube is at final position
-        reached = tcp_to_push_pose_dist < 0.01
-        obj_to_goal_dist = torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[-1,:,:2], axis=1
+        # reward for keeping object still at final location
+        static_reward = 1 - torch.tanh(
+            5 * torch.linalg.norm(self.agent.robot.get_qvel()[..., :-2], axis=1)
         )
-        place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached # initially was +=, now ignoring the reaching reward
-        '''
+        static_reward = static_reward * info["is_obj_placed"]
+        
+        # sum of all rewards that dont depend on expert trajectory
+        independent_reward = reaching_reward + static_reward # 2
+
+        # grasping reward for grasping the object properly
+        independent_reward += info["is_grasping"] * torch.ones_like(independent_reward)
 
         # return now if we cant copy demo anymore
         if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
@@ -282,18 +277,18 @@ class ExpertDemoEnv(BaseEnv):
         else:
             cur_step = self.env.elapsed_steps[0]
 
-        all_rewards = self.traj_reward(tcp_to_push_pose_dist, info).to(self.device)
+        all_rewards = self.traj_reward(info).to(self.device)
         mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
         mask = self.env_step.unsqueeze(1) <= mask_range
         max_step = torch.max(torch.where(mask, all_rewards, 0), axis=1)
         self.env_step = max_step.indices + 1
-        reward = max_step.values
+        reward = max_step.values + independent_reward
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = self.max_reward
         return reward
 
-    def traj_reward(self, tcp_to_push_pose_dist, info): # steps are the set of steps for each trajectory
+    def traj_reward(self, info): # steps are the set of steps for each trajectory, 3
         # to measure distance between quaternions: first normalize each quaternion, then
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
@@ -302,10 +297,6 @@ class ExpertDemoEnv(BaseEnv):
         reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
-        # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
-        # This reward design helps train RL agents faster by staging the reward out.
-        # TODO: maybe give n steps before agent has to start copying the teacher
-        reached = tcp_to_push_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
                 self.obj.pose.p.unsqueeze(1) - self.cube_pose, axis=2
         )
@@ -316,10 +307,9 @@ class ExpertDemoEnv(BaseEnv):
         robot_to_path_dist = torch.linalg.norm(
                 self.agent.tcp.pose.p.unsqueeze(1) - self.rob_pose, axis=2
         )
-        reaching_reward = 1 - torch.tanh(5 * robot_to_path_dist)
-        reward += reaching_reward
+        alignment_reward = 1 - torch.tanh(5 * robot_to_path_dist)
+        reward += alignment_reward
 
-        reward += self.agent.is_grasping(self.obj).unsqueeze(1)*torch.ones_like(reward)
         # also check that we are grasping properly at our chosen index, we want to reward if data and agent state match
         # reward += ~torch.logical_xor(self.agent.is_grasping(self.obj).unsqueeze(1), torch.tensor(self.rob_grasp).to(self.device).squeeze().unsqueeze(0))*torch.ones_like(reward)
 
