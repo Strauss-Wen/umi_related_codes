@@ -65,7 +65,7 @@ class ExpertDemoEnv(BaseEnv):
     agent: Union[Panda, Xmate3Robotiq, Fetch, XArm7Ability]
 
     # set some commonly used values
-    goal_radius = 0.1
+    goal_thresh = 0.025
     cube_half_size = 0.02
 
     def __init__(self, *args, robot_uids="xarm7", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
@@ -75,7 +75,6 @@ class ExpertDemoEnv(BaseEnv):
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
         self.cube_aim_position = [0, 0.3, 0.02]
-        self.goal_radius = 0.08
         self.env = self
         self.max_reward = 4
         self.env_step = None
@@ -142,7 +141,6 @@ class ExpertDemoEnv(BaseEnv):
             half_size=self.cube_half_size,
             color=np.array([12, 42, 160, 255]) / 255,
             name="cube",
-            body_type="dynamic",
         )
 
         # initialize our cube position tensor and put it on the gpu 
@@ -194,6 +192,7 @@ class ExpertDemoEnv(BaseEnv):
 
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
             init_qpos = ([0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2] + [0] * 6)
+            init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
             qpos = (
                 self.env._episode_rng.normal(
                     0, self.robot_init_qpos_noise, (b, len(init_qpos))
@@ -213,25 +212,33 @@ class ExpertDemoEnv(BaseEnv):
         # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
-                self.obj.pose.p[..., :2] - self.cube_pose[-1,:2], axis=1
+                self.obj.pose.p - self.cube_pose, axis=1
             )
-            < self.goal_radius
+            < self.goal_thresh
         )
         
         is_pose_same = torch.logical_and(
-            torch.linalg.norm(self.agent.tcp.pose.p - self.rob_pose[-1], axis=1) < self.goal_radius,
+            torch.linalg.norm(self.agent.tcp.pose.p - self.rob_pose[-1], axis=1) < self.goal_thresh,
             self.env_step >= self.rob_pose.shape[0]
         )
+
+        is_robot_static = self.agent.is_static(0.2)
+        is_grasped = self.agent.is_grasping(self.cube)
 
         # "success": torch.logical_and(is_pose_same, ~(self.rob_grasp[-1].item() ^ self.agent.is_grasping(self.obj))),
         return {
             "success": torch.logical_and(is_pose_same, is_obj_placed),
+            "is_obj_placed": is_obj_placed,
+            "is_pose_same": is_pose_same,
+            "is_robot_static": is_robot_static,
+            "is_grasped": is_grasped,
         }
 
     def _get_obs_extra(self, info: Dict):
         # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
         # grippers of the robot
         obs = dict(
+            is_grasped=info["is_grasped"],
             tcp_pose=self.agent.tcp.pose.raw_pose,
         )
         if self._obs_mode in ["state", "state_dict"]:
@@ -244,12 +251,6 @@ class ExpertDemoEnv(BaseEnv):
             )
             # step=self.elapsed_steps[0].repeat((self.obj.pose.raw_pose.shape[0], 1)) # since we have conditioning
         return obs
-
-    # select the correct value in the traj
-    def filter(self, env_steps, traj):
-        to_stack = [traj[i if i < traj.shape[0] else -1] for i in env_steps]
-
-        return torch.stack(to_stack)
 
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # TODO: define reward function based on trajectory and timestep (info should have information about this)
