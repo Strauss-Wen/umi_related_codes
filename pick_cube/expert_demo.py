@@ -74,7 +74,6 @@ class ExpertDemoEnv(BaseEnv):
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
-        self.cube_aim_position = [0, 0.3, 0.02]
         self.env = self
         self.max_reward = 6
         self.env_step = None
@@ -143,11 +142,18 @@ class ExpertDemoEnv(BaseEnv):
             name="cube",
         )
 
+        self.goal_site = actors.build_sphere(
+            self.scene,
+            radius=self.goal_thresh,
+            color=[0, 1, 0, 1],
+            name="goal_site",
+            body_type="kinematic",
+            add_collision=False,
+        )
+        self._hidden_objects.append(self.goal_site)
+
         # initialize our cube position tensor and put it on the gpu 
         with torch.device(self.device):
-            self.cube_aim_position = torch.unsqueeze(torch.tensor(self.cube_aim_position), dim=0)
-            self.cube_aim_position = self.cube_aim_position.repeat((self.obj._num_objs, 1))
-
             # move trajectories to device and format them
             self.rob_pose = torch.from_numpy(self.rob_pose).to(self.device)
             self.rob_rot = torch.from_numpy(self.rob_rot).to(self.device)
@@ -176,14 +182,14 @@ class ExpertDemoEnv(BaseEnv):
             xyz[..., 2] = self.cube_half_size
             q = [1, 0, 0, 0]
             
-            # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
-            # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
-            # furthermore, notice how here we do not even using env_idx as a variable to say set the pose for objects in desired
-            # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
-            # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
+            # set object position
             obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) # set initial cube pose to match trajectory start
             self.obj.set_pose(obj_pose)
 
+            # create a marker for the goal position
+            goal_xyz = self.cube_pose[-1]
+            self.goal_site.set_pose(Pose.create_from_pq(goal_xyz))
+            
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
             init_qpos = ([0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2] + [0] * 6)
             init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
@@ -196,7 +202,7 @@ class ExpertDemoEnv(BaseEnv):
 
             self.env.agent.reset(qpos)
             self.env.agent.robot.set_pose(sapien.Pose(self.robot_pose))
-            
+
             # this may be a better pose to try
             # self.agent.robot.set_pose(sapien.Pose([-0.415, 0, 0])) 
 
@@ -242,7 +248,7 @@ class ExpertDemoEnv(BaseEnv):
             # if the observation mode is state/state_dict, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
             obs.update(
-                goal_pos=self.cube_aim_position,
+                goal_pos=self.cube_pose[-1].unsqueeze(0).repeat((info["is_grasping"].shape[0], 1)),
                 obj_pose=self.obj.pose.raw_pose,
                 step=self.elapsed_steps
             )
@@ -301,7 +307,7 @@ class ExpertDemoEnv(BaseEnv):
                 self.obj.pose.p.unsqueeze(1) - self.cube_pose, axis=2
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * self.agent.is_grasping(self.obj).unsqueeze(1)
+        reward += place_reward * info['is_grasping'].unsqueeze(1)
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
