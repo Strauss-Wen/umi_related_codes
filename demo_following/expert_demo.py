@@ -156,7 +156,7 @@ class ExpertDemoEnv(BaseEnv):
         builder = self.scene.create_actor_builder()
         builder.add_convex_collision_from_file("./demo/mesh/cup_resized.obj")
         builder.add_visual_from_file("./demo/mesh/cup_resized.dae")
-        self.obj = builder.build_kinematic("cup")
+        self.obj = builder.build("cup")
 
         self.goal_site = actors.build_sphere(
             self.scene,

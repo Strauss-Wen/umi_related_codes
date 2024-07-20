@@ -21,9 +21,9 @@ def T_to_pq(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     q = r.as_quat()
     
     # TODO: scale all p to p - smallest z-coordinate in p
-    import pdb; pdb.set_trace()
-    min_z = min(p[:,-1])
-    p[:-1] -= min_z
+    # import pdb; pdb.set_trace()
+    # min_z = min(p[:,-1])
+    # p[:-1] -= min_z
     return p, q
 
 # def T_to_pq_batch(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
