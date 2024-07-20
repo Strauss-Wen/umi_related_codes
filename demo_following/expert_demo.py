@@ -142,12 +142,21 @@ class ExpertDemoEnv(BaseEnv):
 
         # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
         # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
-        self.obj = actors.build_cube(
-            self.scene,
-            half_size=self.cube_half_size,
-            color=np.array([12, 42, 160, 255]) / 255,
-            name="cube",
-        )
+        # self.obj = actors.build_cube(
+        #     self.scene,
+        #     half_size=self.cube_half_size,
+        #     color=np.array([12, 42, 160, 255]) / 255,
+        #     name="cube",
+        # )
+        
+        # make sure mesh files exist
+        assert(os.path.exists("./demo/mesh/cup_resized.obj"))
+        assert(os.path.exists("./demo/mesh/cup_resized.dae"))
+        
+        builder = self.scene.create_actor_builder()
+        builder.add_convex_collision_from_file("./demo/mesh/cup_resized.obj")
+        builder.add_visual_from_file("./demo/mesh/cup_resized.dae")
+        self.obj = builder.build_kinematic("cup")
 
         self.goal_site = actors.build_sphere(
             self.scene,
@@ -183,8 +192,8 @@ class ExpertDemoEnv(BaseEnv):
             xyz[..., 2] = self.cube_half_size
             q = [1, 0, 0, 0]
             
-            # set object position
-            obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) # set initial cube pose to match trajectory start
+            # set initial object pose to match trajectory start
+            obj_pose = Pose.create_from_pq(p=self.cube_pose[0], q=self.cube_rot[0]) 
             self.obj.set_pose(obj_pose)
 
             # create a marker for the goal position
@@ -193,6 +202,7 @@ class ExpertDemoEnv(BaseEnv):
             
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
             init_qpos = ([0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2] + [0] * 6)
+            init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
             init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
             qpos = (
                 self.env._episode_rng.normal(
