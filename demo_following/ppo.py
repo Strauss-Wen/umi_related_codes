@@ -2,7 +2,7 @@
 import os
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import gymnasium as gym
@@ -98,6 +98,12 @@ class Args:
     """frequency to save training videos in terms of iterations"""
     finite_horizon_gae: bool = True
 
+    # env specific variables
+    rob_pos: list[int] = field(default_factory=lambda:[-0.16, -0.4, 0])
+    max_reward: int = 7
+    demo_loc: str = './demo'
+    mesh_loc: str = './demo/mesh'
+
     # to be filled in runtime
     batch_size: int = 0
     """the batch size (computed in runtime)"""
@@ -110,7 +116,6 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
-
 
 class Agent(nn.Module):
     def __init__(self, envs):
@@ -198,7 +203,7 @@ if __name__ == "__main__":
 
     # env setup
     # switch render mode between rgb_array and human
-    env_kwargs = dict(obs_mode="state", control_mode="pd_joint_delta_pos", render_mode="rgb_array", sim_backend="gpu")
+    env_kwargs = dict(obs_mode="state", control_mode="pd_joint_delta_pos", render_mode="rgb_array", sim_backend="gpu", rob_pos=args.rob_pos, max_reward=args.max_reward, demo_loc=args.demo_loc, mesh_loc=args.mesh_loc)
     envs = gym.make(args.env_id, num_envs=args.num_envs if not args.evaluate else 1, **env_kwargs)
     eval_envs = gym.make(args.env_id, num_envs=args.num_eval_envs, **env_kwargs)
     if isinstance(envs.action_space, gym.spaces.Dict):

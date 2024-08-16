@@ -41,7 +41,7 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs import Pose
 from mani_skill.utils.structs.types import Array, GPUMemoryConfig, SimConfig
 from mani_skill.utils.building.ground import build_ground
-
+    
 @register_env("ExpertDemoFollow-v1", max_episode_steps=50)
 class ExpertDemoEnv(BaseEnv):
     """
@@ -70,26 +70,28 @@ class ExpertDemoEnv(BaseEnv):
     goal_thresh = 0.025
     cube_half_size = 0.02
 
-    def __init__(self, *args, robot_uids="xarm7", robot_init_qpos_noise=0.02, traj='./robot_traj', **kwargs):
+    def __init__(self, *args, robot_uids="xarm7", robot_init_qpos_noise=0.02, traj='./robot_traj', rob_pos=None, max_reward=None, demo_loc=None, mesh_loc=None, **kwargs):
         # specifying robot_uids="panda" as the default means gym.make("PushCube-v1") will default to using the panda arm.
         self.robot_init_qpos_noise = robot_init_qpos_noise
         self.init_qpos = np.array([0.0, 0.1963495, 0.0, -2.617993,
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
-        self.robot_pose = [-0.16, -0.4, 0]
+        self.robot_pose = rob_pos
+        # self.robot_pose = [-0.16, -0.2, 0]
         self.env = self
-        self.max_reward = 6
+        self.max_reward = max_reward # 6 with quat loss of some sort
         self.env_step = None
         self.last = None
+        self.mesh_loc = mesh_loc
 
         # assert that needed data exists
-        assert(os.path.exists("./demo"))
-        assert(os.path.exists("./demo/object_T.npy"))
-        assert(os.path.exists("./demo/gripper_T.npy"))
+        assert(os.path.exists(f"{demo_loc}"))
+        assert(os.path.exists(f"{demo_loc}/cup_T.npy"))
+        assert(os.path.exists(f"{demo_loc}/gripper_T.npy"))
 
         # load cube position, robot positions and rotation
         # cube_pose.npy  cube_rot.npy  poses.npy  rotations.npy
-        self.cube_pose, self.cube_rot = T_to_pq(np.load('./demo/object_T.npy'))
-        self.rob_pose, self.rob_rot = T_to_pq(np.load('./demo/gripper_T.npy'))
+        self.cube_pose, self.cube_rot = T_to_pq(np.load(f'{demo_loc}/cup_T.npy'))
+        self.rob_pose, self.rob_rot = T_to_pq(np.load(f'{demo_loc}/gripper_T.npy'))
 
         # optionally set the robot's initial position to match the gripper's
         # self.robot_pose = self.rob_pose[0]
@@ -150,12 +152,12 @@ class ExpertDemoEnv(BaseEnv):
         # )
         
         # make sure mesh files exist
-        assert(os.path.exists("./demo/mesh/cup_resized.obj"))
-        assert(os.path.exists("./demo/mesh/cup_resized.dae"))
+        assert(os.path.exists(f"{self.mesh_loc}/cup_bottom_flattened.obj"))
+        assert(os.path.exists(f"{self.mesh_loc}/cup_resized.dae"))
         
         builder = self.scene.create_actor_builder()
-        builder.add_convex_collision_from_file("./demo/mesh/cup_resized.obj")
-        builder.add_visual_from_file("./demo/mesh/cup_resized.dae")
+        builder.add_convex_collision_from_file(f"{self.mesh_loc}/cup_bottom_flattened.obj")
+        builder.add_visual_from_file(f"{self.mesh_loc}/cup_resized.dae")
         self.obj = builder.build("cup")
 
         self.goal_site = actors.build_sphere(
@@ -203,7 +205,7 @@ class ExpertDemoEnv(BaseEnv):
             # finally set the qpos of the robot (can no longer do this due to mismatch in robots between demo and use)
             init_qpos = ([0, 0, 0, np.pi / 3, 0, np.pi / 3, -np.pi / 2] + [0] * 6)
             init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
-            init_qpos = ([0.0, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
+            init_qpos = ([1.5, -0.4, 0.0, 0.5, 0.0, 0.9, -3.0] + [0] * 6)
             qpos = (
                 self.env._episode_rng.normal(
                     0, self.robot_init_qpos_noise, (b, len(init_qpos))
@@ -221,9 +223,6 @@ class ExpertDemoEnv(BaseEnv):
             self.last = torch.zeros_like(self.env_step).to(self.device) - 1
 
     def evaluate(self):
-        # TODO: redefine success based on whether final pose of cube matches desired target position and ROTATION
-        # use self.env.elapsed_steps to get the index of correct robot and cube position
-        # can define success as if elapsed steps equivalent to length of the cube array + cube position is similar
         is_obj_placed = (
             torch.linalg.norm(
                 self.obj.pose.p - self.cube_pose[-1], axis=1
@@ -280,26 +279,23 @@ class ExpertDemoEnv(BaseEnv):
         static_reward = 1 - torch.tanh(
             5 * torch.linalg.norm(self.agent.robot.get_qvel()[..., :-2], axis=1)
         )
-        static_reward = static_reward * info["is_obj_placed"]
+        static_reward = static_reward * info["is_obj_placed"] 
         
         # sum of all rewards that dont depend on expert trajectory
-        independent_reward = reaching_reward + static_reward # 2
+        independent_reward = reaching_reward + static_reward*(self.max_reward - 1) # 5
 
         # grasping reward for grasping the object properly
-        independent_reward += info["is_grasping"] * torch.ones_like(independent_reward)
+        # independent_reward += info["is_grasping"] * torch.ones_like(independent_reward)
 
-        # return now if we cant copy demo anymore
-        if self.env.elapsed_steps[0] >= self.cube_pose.shape[0]: # or self.env.elapsed_steps[0] < 8
-            cur_step = -1
-        else:
-            cur_step = self.env.elapsed_steps[0]
+        # ignore trajectory reward for now
+        # all_rewards = self.traj_reward(info).to(self.device)
+        # mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
+        # mask = self.env_step.unsqueeze(1) <= mask_range
+        # max_step = torch.max(torch.where(mask, all_rewards, 0), axis=1)
+        # self.env_step = max_step.indices + 1
+        # reward = max_step.values + independent_reward
 
-        all_rewards = self.traj_reward(info).to(self.device)
-        mask_range = torch.arange(0, all_rewards.shape[1]).repeat((all_rewards.shape[0], 1)).to(self.device)
-        mask = self.env_step.unsqueeze(1) <= mask_range
-        max_step = torch.max(torch.where(mask, all_rewards, 0), axis=1)
-        self.env_step = max_step.indices + 1
-        reward = max_step.values + independent_reward
+        reward = independent_reward
 
         # assign rewards to parallel environments that achieved success to the maximum of 4, as we now also consider the robot arm position reward
         reward[info["success"]] = self.max_reward
@@ -310,22 +306,22 @@ class ExpertDemoEnv(BaseEnv):
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
         # q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
-        q_loss = self.quat_diff(self.rob_rot, self.obj.pose.q.unsqueeze(1))
-        reward = q_loss
+        # q_loss = self.quat_diff(self.cube_rot, self.obj.pose.q.unsqueeze(1))
+        # reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         obj_to_goal_dist = torch.linalg.norm(
                 self.obj.pose.p.unsqueeze(1) - self.cube_pose, axis=2
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * info['is_grasping'].unsqueeze(1)
+        reward = place_reward #  * info['is_grasping'].unsqueeze(1) # obj pos change
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
                 self.agent.tcp.pose.p.unsqueeze(1) - self.rob_pose, axis=2
         )
         alignment_reward = 1 - torch.tanh(5 * robot_to_path_dist)
-        reward += alignment_reward
+        # reward += alignment_reward * info['is_grasping'].unsqueeze(1)
 
         return reward
 

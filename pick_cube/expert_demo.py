@@ -75,7 +75,7 @@ class ExpertDemoEnv(BaseEnv):
                                 0.0, 2.94155926, 0.78539816, 0.0, 0.0])
         self.robot_pose = [-0.16, -0.4, 0]
         self.env = self
-        self.max_reward = 6
+        self.max_reward = 5 # meant to be 6
         self.env_step = None
         self.last = None
 
@@ -299,15 +299,15 @@ class ExpertDemoEnv(BaseEnv):
         # angular diff = cos^-1 (2*<q1,q2>^2 - 1)
         # scaled between 0 and 1 difference: <q1,q2>^2 where 0 is for different quaternions and 1 is for similar
         # q_loss = torch.bmm(self.filter(steps, self.rob_rot).unsqueeze(1), self.obj.pose.q[...,:].unsqueeze(-1)).squeeze()
-        q_loss = self.quat_diff(self.rob_rot, self.obj.pose.q.unsqueeze(1))
-        reward = q_loss
+        # q_loss = self.quat_diff(self.rob_rot, self.obj.pose.q.unsqueeze(1))
+        # reward = q_loss
 
         # compute a placement reward to encourage robot to move the cube to the center of the goal region
         obj_to_goal_dist = torch.linalg.norm(
                 self.obj.pose.p.unsqueeze(1) - self.cube_pose, axis=2
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * info['is_grasping'].unsqueeze(1)
+        reward = place_reward * info['is_grasping'].unsqueeze(1)
         
         # finally assign a reward based on the robot arm position
         robot_to_path_dist = torch.linalg.norm(
