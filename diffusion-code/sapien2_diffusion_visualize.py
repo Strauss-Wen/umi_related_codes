@@ -135,8 +135,6 @@ if __name__ == '__main__':
 
     # pdb.set_trace()
 
-
-
     # debug only, diffusion can't always generate correct rotation
     gt_rotation = eval_data_dict[scene_type]['gripper']
     if len(gt_rotation.shape) == 3:

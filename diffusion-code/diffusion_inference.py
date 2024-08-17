@@ -7,8 +7,6 @@ import sys
 from diffusers.training_utils import EMAModel
 from tqdm import tqdm
 
-
-
 obs_len = 2
 pred_len = 16
 act_len = 8

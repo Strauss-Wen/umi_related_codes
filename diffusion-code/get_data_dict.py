@@ -1,5 +1,6 @@
 import os, sys
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 import pdb
 import math
 
@@ -26,10 +27,25 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
             gripper_T: np.ndarray = np.load((os.path.join(scene_path, "xarm_T.npy")))    # [Ni 4 4]
 
             # ignore the last row [0 0 0 1] of the transformation matrix
-            cup_T = cup_T[:, :3, :] # [Ni 3 4]
-            gripper_T = gripper_T[:, :3, :]
+            # cup_T = cup_T[:, :3, :] # [Ni 3 4]
+            # gripper_T = gripper_T[:, :3, :]
 
-            act_T = np.diff(gripper_T, axis=0)  # [Ni-1 3 4]
+            inv_cup = np.linalg.inv(cup_T[:-1])
+            inv_gripper = np.linalg.inv(gripper_T[:-1])
+
+            # get relative rotations
+            cup_T[1:] = cup_T[1:] @ inv_cup
+            gripper_T[1:] = gripper_T[1:] @ inv_gripper
+
+            # convert to axis-angle
+            cup_rel = R.from_matrix(cup_T[:, :3, :3]).as_euler('xyz')
+            gripper_rel = R.from_matrix(gripper_T[:, :3, :3]).as_euler('xyz')
+
+            # compose axis-angle and xyz (3 length + 3 length) 
+            act_T = np.concatenate((gripper_rel, np.squeeze(gripper_T[:, :3, 3])), axis=1)
+
+            import pdb; pdb.set_trace()
+            # act_T = np.diff(gripper_T, axis=0)  # [Ni-1 3 4]
 
             scene_length = cup_T.shape[0]
             for i in range(1, scene_length - 1):
@@ -46,8 +62,6 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
                     obs_i_cup = np.concatenate([cup_T_pad, obs_i_cup], axis=0)  # [obs_len 3 4]
                     obs_i_gripper = np.concatenate([gripper_T_pad, obs_i_gripper], axis=0)
 
-                    
-
                 else:
                     obs_i_cup = cup_T[(i-obs_len+1):i+1]    # [obs_len 3 4]
                     obs_i_gripper = gripper_T[(i-obs_len+1):i+1]    # [obs_len 3 4]
@@ -55,8 +69,6 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
                 obs_i_cup = obs_i_cup.reshape([obs_len, -1])
                 obs_i_gripper = obs_i_gripper.reshape(([obs_len, -1]))
                 
-
-
                 act_pad_end_len = (1 + i + pred_len - scene_length)
                 if act_pad_end_len > 0:
                     # need to pad action (zeros) at the end
