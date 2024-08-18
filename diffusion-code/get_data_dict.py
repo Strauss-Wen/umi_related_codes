@@ -26,10 +26,6 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
             cup_T: np.ndarray = np.load(os.path.join(scene_path, "cup_T.npy"))  # [Ni 4 4]
             gripper_T: np.ndarray = np.load((os.path.join(scene_path, "xarm_T.npy")))    # [Ni 4 4]
 
-            # ignore the last row [0 0 0 1] of the transformation matrix
-            # cup_T = cup_T[:, :3, :] # [Ni 3 4]
-            # gripper_T = gripper_T[:, :3, :]
-
             inv_cup = np.linalg.inv(cup_T[:-1])
             inv_gripper = np.linalg.inv(gripper_T[:-1])
 
@@ -77,8 +73,8 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
                     obs_i_cup = np.concatenate([obs_i_cup, cup_T_pad], axis=0)  # [obs_len 3 4]
                     obs_i_gripper = np.concatenate([obs_i_gripper, gripper_T_pad], axis=0)
                 else:
-                    obs_i_cup = cup_pos[(i-obs_len+1):i+1]    # [obs_len 3 4]
-                    obs_i_gripper = gripper_pos[(i-obs_len+1):i+1]    # [obs_len 3 4]
+                    obs_i_cup = cup_pos[(i-obs_len+1):i+1]    # [obs_len 6]
+                    obs_i_gripper = gripper_pos[(i-obs_len+1):i+1]    # [obs_len 6]
 
                 obs_i_cup = obs_i_cup.reshape([obs_len, -1])
                 obs_i_gripper = obs_i_gripper.reshape(([obs_len, -1]))
@@ -86,7 +82,7 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
                 act_pad_start_len = pred_len - i - 1
                 act_pad_end_len = pred_len + i - scene_length
                 if act_pad_start_len > 0:
-                    # need to pad action (zeros) at the end
+                    # need to pad action (zeros) at the start
                     act_i = act_T[:i+1]   # [Ni-1-i 3 4]
                     act_i_pad = np.zeros([act_pad_start_len, act_T.shape[1]]) # pad, 6
                     act_i = np.concatenate([act_i_pad, act_i], axis=0)  # [pred_len 6]
@@ -106,34 +102,11 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
 
                 obs_i = np.concatenate([obs_i_cup, obs_i_gripper], axis=1)   # [obs_len 24]
                 
-                # obs_i_min = np.min(obs_i, axis=0)
-                # obs_i_max = np.max(obs_i, axis=0)
-                # obs_i_range = [obs_i_min, obs_i_max]    # [min max]
-
-                # act_i_min = np.min(act_i, axis=0)
-                # act_i_max = np.max(act_i, axis=0)
-                # act_i_range = [act_i_min, act_i_max]
-
-                # obs_i_normalized = (obs_i - obs_i_range[0]) / (obs_i_range[1] - obs_i_range[0])
-                # obs_i_normalized = obs_i_normalized * 2 - 1
-
-                # act_i_normalized = (act_i - act_i_range[0]) / (act_i_range[1] - act_i_range[0])
-                # act_i_normalized = act_i_normalized * 2 - 1
-
-
                 data_dict[count] = {}
-                # data_dict[count]['obs'] = obs_i_normalized
-                # data_dict[count]['act'] = act_i_normalized
-                # data_dict[count]['obs_range'] = obs_i_range
-                # data_dict[count]['act_range'] = act_i_range
 
-                data_dict[count]['obs'] = obs_i
-                data_dict[count]['act'] = act_i
+                data_dict[count]['obs'] = obs_i # obs_len, 12 - first cup then gripper
+                data_dict[count]['act'] = act_i # pred_len, 6
                 
-                # if math.isnan(act_i_normalized[0, 0]):
-                    # pdb.set_trace()
-                    # z=1
-
                 count += 1
     
     return data_dict

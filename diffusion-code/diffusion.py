@@ -7,11 +7,15 @@ from diffusers.optimization import get_scheduler
 from tqdm.auto import tqdm
 from get_data_dict import get_data_dict
 from noise_pred_net import ConditionalUnet1D
-import pdb
+from omegaconf import OmegaConf
 import math
 import os
+import wandb
 
 os.makedirs("./ckpt", exist_ok=True)
+
+conf = OmegaConf.load('./config.yaml')
+import pdb; pdb.set_trace
 
 #@markdown ### **Dataset**
 #@markdown
@@ -39,6 +43,7 @@ class MoveCupDataset(torch.utils.data.Dataset):
         seq = self.data_dict[idx]
         return seq
 
+# TODO: config file
 obs_len = 2
 pred_len = 16
 act_len = 8
@@ -54,6 +59,7 @@ dataset = MoveCupDataset(
     act_len=act_len
 )
 
+# TODO: batch, workers, shuffle, persistent workers config file
 dataloader = torch.utils.data.DataLoader(
     dataset,
     batch_size=16,
@@ -77,6 +83,7 @@ dataloader = torch.utils.data.DataLoader(
 #@markdown `x` is passed through 2 `Conv1dBlock` stacked together with residual connection.
 #@markdown `cond` is applied to `x` with [FiLM](https://arxiv.org/abs/1709.07871) conditioning.
 
+# TODO: config file
 obs_dim = 12
 action_dim = 6
 
@@ -87,6 +94,7 @@ noise_pred_net = ConditionalUnet1D(
 )
 
 # for this demo, we use DDPMScheduler with 100 diffusion iterations
+# TODO: iterations and details from config file
 num_diffusion_iters = 100
 noise_scheduler = DDPMScheduler(
     num_train_timesteps=num_diffusion_iters,
@@ -104,22 +112,26 @@ device = torch.device('cuda')
 _ = noise_pred_net.to(device)
 
 # ============================================ training ============================================
+# TODO: config
 num_epochs = 100
 
 # Exponential Moving Average
 # accelerates training and improves stability
 # holds a copy of the model weights
+# TODO: config
 ema = EMAModel(
     parameters=noise_pred_net.parameters(),
     power=0.75)
 
 # Standard ADAM optimizer
 # Note that EMA parametesr are not optimized
+# TODO: config
 optimizer = torch.optim.AdamW(
     params=noise_pred_net.parameters(),
     lr=1e-4, weight_decay=1e-6)
 
 # Cosine LR schedule with linear warmup
+# TODO: config
 lr_scheduler = get_scheduler(
     name='cosine',
     optimizer=optimizer,

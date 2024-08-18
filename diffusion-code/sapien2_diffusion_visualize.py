@@ -6,8 +6,6 @@ import numpy as np
 import sys
 import os
 from gripper_pose_amend import umi_gripper_to_gripper_tip, xarm_gripper_tip_to_gripper
-import pdb
-
 
 def T_to_pq(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     # T: [4, 4]
@@ -26,8 +24,6 @@ def moving_average(data, window_size):
     cumsum = np.cumsum(data, axis=0)
     return (cumsum[window_size:] - cumsum[:-window_size]) / window_size
 
-
-
 def main(eval_data: np.ndarray, eval_output: np.ndarray, mesh_folder_path: str, seq:list[str]):
 
     engine = sapien.Engine()  # Create a physical simulation engine
@@ -36,9 +32,7 @@ def main(eval_data: np.ndarray, eval_output: np.ndarray, mesh_folder_path: str, 
     scene = engine.create_scene()  # Create an instance of simulation world (aka scene)
     scene.set_timestep(1 / 100.0)  # Set the simulation frequency
 
-
     scene.add_ground(altitude=0)  # Add a ground
-
 
     object_dict = {}
 

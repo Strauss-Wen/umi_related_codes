@@ -10,8 +10,8 @@ from tqdm import tqdm
 obs_len = 2
 pred_len = 16
 act_len = 8
-obs_dim = 24
-action_dim = 12
+obs_dim = 12
+action_dim = 6
 num_diffusion_iters = 100
 
 device = torch.device('cuda')

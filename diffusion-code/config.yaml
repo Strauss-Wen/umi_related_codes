@@ -1,0 +1,23 @@
+lengths:
+  obs_len: 2
+  pred_len: 16
+  act_len: 8
+dims:
+  obs_dim: 12
+  action_dim: 6
+data:
+  batch_size: 16
+  num_workers: 1
+  shuffle: True
+  persistent_workers: True
+diffusion:
+  num_diffusion_iters: 100
+  beta_schedule: 'squaredcos_cap_v2'
+  clip_sample: True
+  prediction_type: 'epsilon'
+  training:
+    num_epochs: 100
+    ema_power: 0.75
+    lr: 1e-4
+    weight_decay: 1e-6
+    num_warmup_steps: 500
