@@ -138,5 +138,4 @@ if __name__ == '__main__':
 
     eval_output[:, :3, :3] = gt_rotation
 
-
     main(eval_data=eval_data, eval_output=eval_output, mesh_folder_path=mesh_folder_path, seq=seq)

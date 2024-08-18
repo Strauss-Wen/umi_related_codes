@@ -1,3 +1,4 @@
+project_name: 'data_checker'
 lengths:
   obs_len: 2
   pred_len: 16
@@ -6,6 +7,7 @@ dims:
   obs_dim: 12
   action_dim: 6
 data:
+  path: './diffusion_data_xarm.npy'
   batch_size: 16
   num_workers: 1
   shuffle: True
@@ -15,9 +17,10 @@ diffusion:
   beta_schedule: 'squaredcos_cap_v2'
   clip_sample: True
   prediction_type: 'epsilon'
-  training:
-    num_epochs: 100
-    ema_power: 0.75
-    lr: 1e-4
-    weight_decay: 1e-6
-    num_warmup_steps: 500
+training:
+  num_epochs: 100
+  ema_power: 0.75
+  lr: 1e-4
+  weight_decay: 1e-6
+  lr_scheduler: 'cosine'
+  num_warmup_steps: 500

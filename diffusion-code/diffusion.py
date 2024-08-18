@@ -15,7 +15,6 @@ import wandb
 os.makedirs("./ckpt", exist_ok=True)
 
 conf = OmegaConf.load('./config.yaml')
-import pdb; pdb.set_trace
 
 #@markdown ### **Dataset**
 #@markdown
@@ -43,30 +42,28 @@ class MoveCupDataset(torch.utils.data.Dataset):
         seq = self.data_dict[idx]
         return seq
 
-# TODO: config file
-obs_len = 2
-pred_len = 16
-act_len = 8
+obs_len = conf["lengths"]["obs_len"] # 2
+pred_len = conf["lengths"]["pred_len"] # 16
+act_len = conf["lengths"]["act_len"] # 8
 #|o|o|                             observations: 2
 #| |a|a|a|a|a|a|a|a|               actions executed: 8
 #|p|p|p|p|p|p|p|p|p|p|p|p|p|p|p|p| actions predicted: 16
 
 dataset = MoveCupDataset(
     # dataset_path='/mnt/data/collected_demos_xarm',
-    dataset_path='./diffusion_data_xarm.npy',
+    dataset_path=conf.data.path,
     obs_len=obs_len,
     pred_len=pred_len,
     act_len=act_len
 )
 
-# TODO: batch, workers, shuffle, persistent workers config file
 dataloader = torch.utils.data.DataLoader(
     dataset,
-    batch_size=16,
-    num_workers=1,
-    shuffle=True,
+    batch_size=conf['data']['batch_size'], # 16
+    num_workers=conf['data']['num_workers'], # 1
+    shuffle=conf['data']['shuffle'], # True
     # don't kill worker process afte each epoch
-    persistent_workers=True
+    persistent_workers=conf['data']['persistent_workers'] # True
 )
 
 #@markdown ### **Network**
@@ -83,9 +80,8 @@ dataloader = torch.utils.data.DataLoader(
 #@markdown `x` is passed through 2 `Conv1dBlock` stacked together with residual connection.
 #@markdown `cond` is applied to `x` with [FiLM](https://arxiv.org/abs/1709.07871) conditioning.
 
-# TODO: config file
-obs_dim = 12
-action_dim = 6
+obs_dim = conf['dims']['obs_dim'] # 12
+action_dim = conf['dims']['action_dim'] # 6
 
 # create network object
 noise_pred_net = ConditionalUnet1D(
@@ -94,17 +90,16 @@ noise_pred_net = ConditionalUnet1D(
 )
 
 # for this demo, we use DDPMScheduler with 100 diffusion iterations
-# TODO: iterations and details from config file
-num_diffusion_iters = 100
+num_diffusion_iters = conf['diffusion']['num_diffusion_iters']
 noise_scheduler = DDPMScheduler(
     num_train_timesteps=num_diffusion_iters,
     # the choise of beta schedule has big impact on performance
     # we found squared cosine works the best
-    beta_schedule='squaredcos_cap_v2',
+    beta_schedule=conf['diffusion']['beta_schedule'], # 'squaredcos_cap_v2'
     # clip output to [-1,1] to improve stability
-    clip_sample=True,
+    clip_sample=conf['diffusion']['clip_sample'], # True
     # our network predicts noise (instead of denoised action)
-    prediction_type='epsilon'
+    prediction_type=conf['diffusion']['prediction_type'] # 'epsilon'
 )
 
 # device transfer
@@ -112,33 +107,36 @@ device = torch.device('cuda')
 _ = noise_pred_net.to(device)
 
 # ============================================ training ============================================
-# TODO: config
-num_epochs = 100
+num_epochs = conf['training']['num_epochs'] # 100
 
 # Exponential Moving Average
 # accelerates training and improves stability
 # holds a copy of the model weights
-# TODO: config
 ema = EMAModel(
     parameters=noise_pred_net.parameters(),
-    power=0.75)
+    power=conf['training']['ema_power']) # 0.75
 
 # Standard ADAM optimizer
 # Note that EMA parametesr are not optimized
-# TODO: config
 optimizer = torch.optim.AdamW(
     params=noise_pred_net.parameters(),
-    lr=1e-4, weight_decay=1e-6)
+    lr=conf.training.lr, weight_decay=conf.training.weight_decay) # 1e-4, 1e-6
 
 # Cosine LR schedule with linear warmup
-# TODO: config
 lr_scheduler = get_scheduler(
-    name='cosine',
+    name=conf.training.lr_scheduler, # 'cosine'
     optimizer=optimizer,
-    num_warmup_steps=500,
+    num_warmup_steps=conf.training.num_warmup_steps, # 500
     num_training_steps=len(dataloader) * num_epochs
 )
 
+# create wandb logger
+run = wandb.init(
+    # Set the project where this run will be logged
+    project=conf.project_name,
+    # Track hyperparameters and run metadata
+    config=conf
+)
 print("Start training ...")
 
 # TODO: add wandb or tensorboard logging
@@ -169,7 +167,7 @@ with tqdm(range(num_epochs), desc='Epoch') as tglobal:
                 noise_pred = noise_pred_net(noisy_actions, timesteps, global_cond=obs_cond) # [B pred_len 12]
 
                 # L2 loss
-                loss = nn.functional.mse_loss(noise_pred, noise)
+                loss = nn.functional.mse_loss(noise_pred, noise) 
 
                 # optimize
                 loss.backward()
@@ -187,6 +185,9 @@ with tqdm(range(num_epochs), desc='Epoch') as tglobal:
 
                 epoch_loss.append(loss_cpu)
                 tepoch.set_postfix(loss=loss_cpu)
+                
+                # log loss
+                wandb.log({"loss": loss_cpu, "epoch_loss": epoch_loss})
             
             # if epoch_idx % 20 == 0 and epoch_idx != 0:
                 # torch.save(ema.state_dict(), f"./ckpt/{epoch_idx}.pth")

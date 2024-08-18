@@ -6,16 +6,20 @@ import pdb
 import sys
 from diffusers.training_utils import EMAModel
 from tqdm import tqdm
+from omegaconf import OmegaConf
 
-obs_len = 2
-pred_len = 16
-act_len = 8
-obs_dim = 12
-action_dim = 6
-num_diffusion_iters = 100
+conf = OmegaConf.load('./config.yaml')
+
+obs_len = conf.lengths.obs_len # 2
+pred_len = conf.lengths.pred_len # 16
+act_len = conf.lengths.act_len # 8
+obs_dim = conf.dims.obs_dim # 12
+action_dim = conf.dims.action_dim # 6
+num_diffusion_iters = conf.diffusion.num_diffusion_iters # 100
 
 device = torch.device('cuda')
 
+# TODO: fix dimensions for observations and actions here (12, 6 respectively)
 
 ema_noise_pred_net = ConditionalUnet1D(
         input_dim=action_dim,
