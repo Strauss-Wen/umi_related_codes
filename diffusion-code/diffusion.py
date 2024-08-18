@@ -26,8 +26,6 @@ os.makedirs("./ckpt", exist_ok=True)
 #@markdown  - key `obs`: shape (obs_horizon, obs_dim)
 #@markdown  - key `action`: shape (pred_horizon, action_dim)
 
-
-
 # dataset
 class MoveCupDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_path, obs_len, pred_len, act_len):
@@ -41,15 +39,12 @@ class MoveCupDataset(torch.utils.data.Dataset):
         seq = self.data_dict[idx]
         return seq
 
-
-
 obs_len = 2
 pred_len = 16
 act_len = 8
 #|o|o|                             observations: 2
 #| |a|a|a|a|a|a|a|a|               actions executed: 8
 #|p|p|p|p|p|p|p|p|p|p|p|p|p|p|p|p| actions predicted: 16
-
 
 dataset = MoveCupDataset(
     # dataset_path='/mnt/data/collected_demos_xarm',
@@ -59,7 +54,6 @@ dataset = MoveCupDataset(
     act_len=act_len
 )
 
-
 dataloader = torch.utils.data.DataLoader(
     dataset,
     batch_size=16,
@@ -68,7 +62,6 @@ dataloader = torch.utils.data.DataLoader(
     # don't kill worker process afte each epoch
     persistent_workers=True
 )
-
 
 #@markdown ### **Network**
 #@markdown
@@ -84,19 +77,14 @@ dataloader = torch.utils.data.DataLoader(
 #@markdown `x` is passed through 2 `Conv1dBlock` stacked together with residual connection.
 #@markdown `cond` is applied to `x` with [FiLM](https://arxiv.org/abs/1709.07871) conditioning.
 
-
-
-
-obs_dim = 24
-action_dim = 12
+obs_dim = 12
+action_dim = 6
 
 # create network object
 noise_pred_net = ConditionalUnet1D(
     input_dim=action_dim,
     global_cond_dim=obs_dim*obs_len
 )
-
-
 
 # for this demo, we use DDPMScheduler with 100 diffusion iterations
 num_diffusion_iters = 100
@@ -141,16 +129,13 @@ lr_scheduler = get_scheduler(
 
 print("Start training ...")
 
-
+# TODO: add wandb or tensorboard logging
 with tqdm(range(num_epochs), desc='Epoch') as tglobal:
-
     for epoch_idx in tglobal:
         epoch_loss = list()
         # batch loop
         with tqdm(dataloader, desc='Batch', leave=False) as tepoch:
             for nbatch in tepoch:
-                # pdb.set_trace()
-
                 nobs = nbatch['obs'].to(device).float()     # [B obs_len 24]
                 naction = nbatch['act'].to(device).float()  # [B pred_len 12]
                 B = nobs.shape[0]
@@ -164,7 +149,6 @@ with tqdm(range(num_epochs), desc='Epoch') as tglobal:
 
                 # sample a diffusion iteration for each data point
                 timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (B,), device=device).long()
-
 
                 # (this is the forward diffusion process)
                 noisy_actions = noise_scheduler.add_noise(naction, noise, timesteps)
@@ -196,8 +180,6 @@ with tqdm(range(num_epochs), desc='Epoch') as tglobal:
                 # torch.save(ema.state_dict(), f"./ckpt/{epoch_idx}.pth")
 
         tglobal.set_postfix(loss=np.mean(epoch_loss))
-
-
 
 # Weights of the EMA model
 # is used for inference

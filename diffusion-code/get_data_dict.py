@@ -1,7 +1,7 @@
 import os, sys
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import pdb
+import copy
 import math
 
 def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) -> dict:
@@ -33,6 +33,13 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
             inv_cup = np.linalg.inv(cup_T[:-1])
             inv_gripper = np.linalg.inv(gripper_T[:-1])
 
+            # save cup and gripper positions
+            cup_pos = copy.deepcopy(cup_T)
+            cup_pos = np.concatenate((R.from_matrix(cup_pos[:, :3, :3]).as_euler('xyz'), np.squeeze(cup_pos[:, :3, 3])), axis=1)
+
+            gripper_pos = copy.deepcopy(gripper_T)
+            gripper_pos = np.concatenate((R.from_matrix(gripper_pos[:, :3, :3]).as_euler('xyz'), np.squeeze(gripper_pos[:, :3, 3])), axis=1)
+
             # get relative rotations
             cup_T[1:] = cup_T[1:] @ inv_cup
             gripper_T[1:] = gripper_T[1:] @ inv_gripper
@@ -44,49 +51,58 @@ def get_data_dict(demos_root: str, obs_len: int, pred_len: int, act_len: int) ->
             # compose axis-angle and xyz (3 length + 3 length) 
             act_T = np.concatenate((gripper_rel, np.squeeze(gripper_T[:, :3, 3])), axis=1)
 
-            import pdb; pdb.set_trace()
             # act_T = np.diff(gripper_T, axis=0)  # [Ni-1 3 4]
 
-            scene_length = cup_T.shape[0]
+            scene_length = cup_pos.shape[0]
             for i in range(1, scene_length - 1):
                 
                 obs_pad_start_len = obs_len - i - 1
+                obs_pad_end_len = obs_len + i - scene_length
                 if obs_pad_start_len > 0:
                     # need to pad observation at the start
-
-                    obs_i_cup = cup_T[:i+1]   # [i+1 3 4]   
-                    obs_i_gripper = gripper_T[:i+1]
-                    cup_T_pad = np.repeat(cup_T[0][np.newaxis], repeats=obs_pad_start_len, axis=0)
-                    gripper_T_pad = np.repeat(gripper_T[0][np.newaxis], repeats=obs_pad_start_len, axis=0)
+                    obs_i_cup = cup_pos[:i+1]   # [i+1 6]   
+                    obs_i_gripper = gripper_pos[:i+1]
+                    cup_T_pad = np.repeat(cup_pos[0][np.newaxis], repeats=obs_pad_start_len, axis=0)
+                    gripper_T_pad = np.repeat(gripper_pos[0][np.newaxis], repeats=obs_pad_start_len, axis=0)
                     
-                    obs_i_cup = np.concatenate([cup_T_pad, obs_i_cup], axis=0)  # [obs_len 3 4]
+                    obs_i_cup = np.concatenate([cup_T_pad, obs_i_cup], axis=0)  # [obs_len 6]
                     obs_i_gripper = np.concatenate([gripper_T_pad, obs_i_gripper], axis=0)
-
+                elif obs_pad_end_len > 0:
+                    # need to pad observation at the end
+                    obs_i_cup = cup_pos[i:]   # [i+1 6]   
+                    obs_i_gripper = gripper_pos[i:]
+                    cup_T_pad = np.repeat(cup_pos[0][np.newaxis], repeats=obs_pad_end_len, axis=0)
+                    gripper_T_pad = np.repeat(gripper_pos[0][np.newaxis], repeats=obs_pad_end_len, axis=0)
+                    
+                    obs_i_cup = np.concatenate([obs_i_cup, cup_T_pad], axis=0)  # [obs_len 3 4]
+                    obs_i_gripper = np.concatenate([obs_i_gripper, gripper_T_pad], axis=0)
                 else:
-                    obs_i_cup = cup_T[(i-obs_len+1):i+1]    # [obs_len 3 4]
-                    obs_i_gripper = gripper_T[(i-obs_len+1):i+1]    # [obs_len 3 4]
+                    obs_i_cup = cup_pos[(i-obs_len+1):i+1]    # [obs_len 3 4]
+                    obs_i_gripper = gripper_pos[(i-obs_len+1):i+1]    # [obs_len 3 4]
 
                 obs_i_cup = obs_i_cup.reshape([obs_len, -1])
                 obs_i_gripper = obs_i_gripper.reshape(([obs_len, -1]))
                 
-                act_pad_end_len = (1 + i + pred_len - scene_length)
-                if act_pad_end_len > 0:
+                act_pad_start_len = pred_len - i - 1
+                act_pad_end_len = pred_len + i - scene_length
+                if act_pad_start_len > 0:
                     # need to pad action (zeros) at the end
-
+                    act_i = act_T[:i+1]   # [Ni-1-i 3 4]
+                    act_i_pad = np.zeros([act_pad_start_len, act_T.shape[1]]) # pad, 6
+                    act_i = np.concatenate([act_i_pad, act_i], axis=0)  # [pred_len 6]
+                elif act_pad_end_len > 0:
+                    # need to pad action (zeros) at the end
                     act_i = act_T[i:]   # [Ni-1-i 3 4]
-                    act_i_pad = np.zeros([act_pad_end_len, 3, 4])
-                    act_i = np.concatenate([act_i, act_i_pad], axis=0)  # [pred_len 3 4]
-
+                    act_i_pad = np.zeros([act_pad_end_len, act_T.shape[1]]) # pad, 6
+                    act_i = np.concatenate([act_i, act_i_pad], axis=0)  # [pred_len 6]
                 else:
-                    act_i = act_T[i:(pred_len+i)]    # [pred_len 3 4]
-
+                    act_i = act_T[i:(pred_len+i)]    # [pred_len 6]
+                
                 act_i = act_i.reshape([pred_len, -1])
-
 
                 # set the cup's starting place as origin
                 obs_i_cup -= obs_i_cup[0]
                 obs_i_gripper -= obs_i_cup[0]
-                # pdb.set_trace()
 
                 obs_i = np.concatenate([obs_i_cup, obs_i_gripper], axis=1)   # [obs_len 24]
                 
