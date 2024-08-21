@@ -8,6 +8,7 @@ from diffusers.training_utils import EMAModel
 from tqdm import tqdm
 from omegaconf import OmegaConf
 from scipy.spatial.transform import Rotation as R
+from datetime import datetime
 
 # diffusion + euler angles
 # no pose normalization
@@ -25,7 +26,6 @@ num_diffusion_iters = conf.diffusion.num_diffusion_iters # 100
 device = torch.device('cuda')
 # device = torch.device("cpu")
 
-# TODO: fix dimensions for observations and actions here (12, 6 respectively)
 
 ema_noise_pred_net = ConditionalUnet1D(
         input_dim=action_dim,
@@ -35,7 +35,7 @@ ema = EMAModel(
     parameters=ema_noise_pred_net.parameters(),
     power=0.75)
 
-state_dict = torch.load("./ckpt/100_final.pth", weights_only=True)
+state_dict = torch.load("./ckpt/final.pth", weights_only=True)
 # pdb.set_trace()
 
 ema.load_state_dict(state_dict)
@@ -53,6 +53,9 @@ noise_scheduler = DDPMScheduler(
     prediction_type='epsilon'
 )
 
+data_dict_ori = np.load("/haozhe-pv/diffusion/data_xarm-normalized.npy", allow_pickle=True).item()
+obs_range = data_dict_ori['obs_range']
+act_range = data_dict_ori['act_range']
 
 
 def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_openness: np.ndarray, max_iter: int):
@@ -73,7 +76,7 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
         # obs_obj = np.repeat(obs_obj[np.newaxis], repeats=obs_len, axis=0)   # [obs_len 6]
         obs_gripper = np.repeat(obs_gripper[np.newaxis], repeats=obs_len, axis=0)   # [obs_len 6]
 
-        openness = np.repeat(gripper_openness[np.newaxis], repeats=obs_len, axis=0) # [obs_len 1]
+        # openness = np.repeat(gripper_openness[np.newaxis], repeats=obs_len, axis=0) # [obs_len 1]
         # obs = np.concatenate([obs_obj, obs_gripper, openness[:, np.newaxis]], axis=1)  # [obs_len 13]
     
     else:
@@ -82,13 +85,13 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
         obs_gripper = np.concatenate((R.from_matrix(gripper_init_T[:, :3, :3]).as_euler('xyz'), np.squeeze(gripper_init_T[:, :3, 3])), axis=1)    # [N 6]
         # pdb.set_trace()
 
-        openness = gripper_openness
+        # openness = gripper_openness
 
         # obs = np.concatenate([obs_obj, obs_gripper, openness[:, np.newaxis]], axis=1)  # [obs_len 13]
 
     # pdb.set_trace()
     history_gripper_traj = [obs_gripper[i] for i in range(obs_len)] # [obs_len [6]]  # position in world fame
-    history_openness = [openness[i] for i in range(obs_len)]    # [obs_len]
+    # history_openness = [openness[i] for i in range(obs_len)]    # [obs_len]
 
     obj_gt_traj = np.concatenate((R.from_matrix(obj_gt_traj[:, :3, :3]).as_euler('xyz'), np.squeeze(obj_gt_traj[:, :3, 3])), axis=1)    # [N 6]
 
@@ -107,12 +110,19 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
 
             obs_i_gripper = np.array(history_gripper_traj[-obs_len:])   # [obs_len 6]
 
-            obs_i_openness = np.array(history_openness[-obs_len:])      # [obs_len 1]
+            # set object's starting pose as the anchor
+            obs_i_gripper -= obs_i_obj[0]
+            obs_i_obj -= obs_i_obj[0]
+
+            # obs_i_openness = np.array(history_openness[-obs_len:])      # [obs_len 1]
             # pdb.set_trace()
             
-            obs_i = np.concatenate([obs_i_obj, obs_i_gripper, obs_i_openness[:, np.newaxis]], axis=1)  # [obs_len 13]
-
+            # obs_i = np.concatenate([obs_i_obj, obs_i_gripper, obs_i_openness[:, np.newaxis]], axis=1)  # [obs_len 13]
+            obs_i = np.concatenate([obs_i_obj, obs_i_gripper], axis=1)  # [obs_len 12]
             obs_i = torch.from_numpy(obs_i).to(device=device, dtype=torch.float32)
+
+            # normalize the observation
+            obs_i = 2 * ((obs_i - obs_range[0]) / (obs_range[1] - obs_range[0])) - 1
 
             # reshape observation to (B,obs_horizon*obs_dim)
             obs_cond = obs_i.unsqueeze(0) # [1 obs_len 13]
@@ -145,18 +155,23 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
 
             naction = naction[0].detach().to('cpu').numpy()    # [pred_len 7]
             action = naction[:act_len]  # [act_len 7]
+            # pdb.set_trace()
+
+            # unnormalize
+            action = ((action + 1) / 2) * (act_range[1] - act_range[0]) + act_range[0]
 
             # execute action_horizon number of steps without replanning
             for i in range(len(action)):
                 frame_idx += 1
-                # pdb.set_trace()
-                gripper_pose_i = history_gripper_traj[-1] + action[i, :-1]
+                
+                # gripper_pose_i = history_gripper_traj[-1] + action[i, :-1]
+                gripper_pose_i = history_gripper_traj[-1] + action[i]
+
                 history_gripper_traj.append(gripper_pose_i)
 
-                history_openness.append(action[i, -1])
+                # history_openness.append(action[i, -1])
 
 
-    # pdb.set_trace()
 
     # pad/reshape from [N 12] to [N 4 4]
     frame_num = len(history_gripper_traj)
@@ -171,7 +186,7 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
 
     output = {}
     output['gripper_traj'] = gripper_traj_mat
-    output['openness'] = gripper_openness
+    # output['openness'] = gripper_openness
 
 
     return output
@@ -180,8 +195,8 @@ def diffusion_eval(obj_gt_traj: np.ndarray, gripper_init_T: np.ndarray, gripper_
 
 if __name__ == "__main__":
     eval_path = sys.argv[1]
-    scene_name = eval_path.split("/")[-1].split(".")[0]
-    print(scene_name)
+    # scene_name = eval_path.split("/")[-1].split(".")[0]
+    # print(scene_name)
     eval_data = np.load(eval_path, allow_pickle=True).item()
 
     eval_output = {}
@@ -204,8 +219,9 @@ if __name__ == "__main__":
     gripper_traj = diffusion_eval(obj_gt_traj=eval_data['seq_along_with']['obj'], gripper_init_T=eval_data['seq_along_with']['gripper'], gripper_openness=eval_data["seq_along_with"]["openness"], max_iter=max_iter)
     eval_output['seq_along_with'] = gripper_traj
 
-    
-    np.save(f"./eval_output/eval_{scene_name}.npy", eval_output, allow_pickle=True)
+    now = datetime.now()
+    t = now.strftime("%m.%d.%H.%M")
+    np.save(f"./eval_output/eval_{t}.npy", eval_output, allow_pickle=True)
 
 
 
