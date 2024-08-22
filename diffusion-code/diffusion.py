@@ -132,11 +132,10 @@ lr_scheduler = get_scheduler(
 
 # create wandb logger
 run = wandb.init(
-    # Set the project where this run will be logged
-    project=conf.project_name,
-    # Track hyperparameters and run metadata
-    config=conf
+    project=conf.project_name # Set the project where this run will be logged
 )
+wandb.config = conf
+
 print("Start training ...")
 
 # TODO: add wandb or tensorboard logging
