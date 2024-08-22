@@ -53,16 +53,14 @@ def diffusion_eval(cup_init_T: np.ndarray, gripper_init_T: np.ndarray, max_iter:
     # cup_init_T: [4 4] only use the first frame pose
     # gripper_init_T: [4 4] same as above
 
-
     B = 1
-    # pdb.set_trace()
 
     # normalize observation
     if (len(cup_init_T.shape)) == 2:
         # [4 4]
-        obs_cup = np.zeros(shape=[obs_len, 12])
+        obs_cup = np.zeros(shape=[obs_len, obs_dim // 2])
         obs_gripper = gripper_init_T - cup_init_T
-        obs_gripper = obs_gripper[:3]   # [3 4]
+        # obs_gripper = obs_gripper[:3]   # [3 4]
         obs_gripper = np.repeat(obs_gripper[np.newaxis], repeats=obs_len, axis=0).reshape([obs_len, 12])   # [obs_len 12]
     
     else:
