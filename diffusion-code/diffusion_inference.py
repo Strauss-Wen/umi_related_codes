@@ -35,7 +35,7 @@ ema = EMAModel(
     parameters=ema_noise_pred_net.parameters(),
     power=0.75)
 
-state_dict = torch.load("./ckpt/100_final.pth", weights_only=True)
+state_dict = torch.load("./ckpt/final.pth", weights_only=True)
 # pdb.set_trace()
 
 ema.load_state_dict(state_dict)
@@ -221,4 +221,16 @@ if __name__ == "__main__":
 
     now = datetime.now()
     t = now.strftime("%m.%d.%H.%M")
+<<<<<<< HEAD
     np.save(f"./eval_output/eval_{t}.npy", eval_output, allow_pickle=True)
+=======
+    np.save(f"./eval_output/eval_{t}.npy", eval_output, allow_pickle=True)
+
+
+
+
+
+
+
+
+>>>>>>> 8b047cfd460d1f885d62780ca8ccc0f8573d8786
