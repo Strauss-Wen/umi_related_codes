@@ -28,10 +28,10 @@ def get_data_dict(demos_root: str, openness_threshold: float, obs_len: int, pred
 
         # openness: np.ndarray = np.load(os.path.join(scene_path, "grip_openness.npy"))    # [Ni]
 
-        inv_gripper = np.linalg.inv(xarm_T[:-1])    # [Ni-1 4 4]
+        inv_gripper = np.linalg.inv(xarm_T[:-1])    # [Ni-1 4 4]    T[last_pos/world]
 
         relative_xarm_pos = copy.deepcopy(xarm_T)
-        relative_xarm_pos = xarm_T[1:] @ inv_gripper
+        relative_xarm_pos = xarm_T[1:] @ inv_gripper    # T[world/this_pos] * T[last_pos/world] = T[last_pos/this_pos]
         relative_xarm_pos = np.concatenate((R.from_matrix(relative_xarm_pos[:, :3, :3]).as_euler('xyz'), np.squeeze(relative_xarm_pos[:, :3, 3])), axis=1)  # [Ni-1 6]
 
 
