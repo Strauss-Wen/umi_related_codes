@@ -1,0 +1,27 @@
+# import numpy as np
+# import sys
+# import pdb
+import os
+import subprocess
+
+obj_seq = ['gripper', 'box2']
+# demo_path = sys.argv[1]
+demo_path = "/mnt/robotics/fp_all/out/side-gripper-cam"
+
+cmd = ['python', 'label_seg.py', '--img_paths']
+
+seq_list = range(35, 50)
+
+for seq in seq_list:
+    for object_i in obj_seq:
+        cmd.append(os.path.join(demo_path, str(seq), object_i, "rgb/000000.png"))
+
+# pdb.set_trace()
+
+os.chdir("/mnt/robotics/Blazar/vision/labeler")
+
+
+subprocess.run(cmd, check=True)
+
+
+

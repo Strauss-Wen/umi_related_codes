@@ -149,15 +149,17 @@ if __name__ == "__main__":
     envs = gym.make(args.env_id, num_envs=1, **env_kwargs)
     if isinstance(envs.action_space, gym.spaces.Dict):
         envs = FlattenActionSpaceWrapper(envs)
-    if args.capture_video:
-        eval_output_dir = f"runs/{run_name}/videos"
-        if args.evaluate:
-            eval_output_dir = f"{os.path.dirname(args.checkpoint)}/test_videos"
-        print(f"Saving eval videos to {eval_output_dir}")
-        if args.save_train_video_freq is not None:
-            save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
-            envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
-        eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
+    
+    # if args.capture_video:
+    #     eval_output_dir = f"runs/{run_name}/videos"
+    #     if args.evaluate:
+    #         eval_output_dir = f"{os.path.dirname(args.checkpoint)}/test_videos"
+    #     print(f"Saving eval videos to {eval_output_dir}")
+    #     if args.save_train_video_freq is not None:
+    #         save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
+    #         envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
+    #     eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
+    
     envs = ManiSkillVectorEnv(envs, 1, ignore_terminations=not args.partial_reset, **env_kwargs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 

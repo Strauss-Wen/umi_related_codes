@@ -38,7 +38,7 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
-    capture_video: bool = True
+    capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
@@ -106,6 +106,7 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
@@ -124,6 +125,7 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(256, 1)),
         )
+
         self.actor_mean = nn.Sequential(
             layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 256)),
             nn.Tanh(),
@@ -133,25 +135,31 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(256, np.prod(envs.single_action_space.shape)), std=0.01*np.sqrt(2)),
         )
+
         self.actor_logstd = nn.Parameter(torch.ones(1, np.prod(envs.single_action_space.shape)) * -0.5)
 
     def get_value(self, x):
         return self.critic(x)
+    
     def get_action(self, x, deterministic=False):
         action_mean = self.actor_mean(x)
         if deterministic:
             return action_mean
+        
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
         probs = Normal(action_mean, action_std)
         return probs.sample()
+    
     def get_action_and_value(self, x, action=None):
         action_mean = self.actor_mean(x)
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
         probs = Normal(action_mean, action_std)
+
         if action is None:
             action = probs.sample()
+
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
 
 
@@ -160,14 +168,18 @@ if __name__ == "__main__":
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = args.total_timesteps // args.batch_size
+
     if args.exp_name is None:
         args.exp_name = os.path.basename(__file__)[: -len(".py")]
         run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     else:
         run_name = args.exp_name
+
     writer = None
+
     if not args.evaluate:
         print("Running training")
+
         if args.track:
             import wandb
 
@@ -180,6 +192,7 @@ if __name__ == "__main__":
                 monitor_gym=True,
                 save_code=True,
             )
+
         writer = SummaryWriter(f"runs/{run_name}")
         writer.add_text(
             "hyperparameters",
@@ -187,6 +200,7 @@ if __name__ == "__main__":
         )
     else:
         print("Running evaluation")
+
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -196,23 +210,27 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+
     # env setup
     # switch render mode between rgb_array and human
     env_kwargs = dict(obs_mode="state", control_mode="pd_joint_delta_pos", render_mode="rgb_array", sim_backend="gpu")
     envs = gym.make(args.env_id, num_envs=args.num_envs if not args.evaluate else 1, **env_kwargs)
     eval_envs = gym.make(args.env_id, num_envs=args.num_eval_envs, **env_kwargs)
+
     if isinstance(envs.action_space, gym.spaces.Dict):
         envs = FlattenActionSpaceWrapper(envs)
         eval_envs = FlattenActionSpaceWrapper(eval_envs)
-    if args.capture_video:
-        eval_output_dir = f"runs/{run_name}/videos"
-        if args.evaluate:
-            eval_output_dir = f"{os.path.dirname(args.checkpoint)}/test_videos"
-        print(f"Saving eval videos to {eval_output_dir}")
-        if args.save_train_video_freq is not None:
-            save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
-            envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
-        eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
+
+    # if args.capture_video:
+    #     eval_output_dir = f"runs/{run_name}/videos"
+    #     if args.evaluate:
+    #         eval_output_dir = f"{os.path.dirname(args.checkpoint)}/test_videos"
+    #     print(f"Saving eval videos to {eval_output_dir}")
+    #     if args.save_train_video_freq is not None:
+    #         save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
+    #         envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
+    #     eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
+    
     envs = ManiSkillVectorEnv(envs, args.num_envs, ignore_terminations=not args.partial_reset, **env_kwargs)
     eval_envs = ManiSkillVectorEnv(eval_envs, args.num_eval_envs, ignore_terminations=not args.partial_reset, **env_kwargs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
@@ -228,6 +246,7 @@ if __name__ == "__main__":
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
 
+
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
@@ -237,16 +256,20 @@ if __name__ == "__main__":
     eps_returns = torch.zeros(args.num_envs, dtype=torch.float, device=device)
     eps_lens = np.zeros(args.num_envs)
     place_rew = torch.zeros(args.num_envs, device=device)
+    
     print(f"####")
     print(f"args.num_iterations={args.num_iterations} args.num_envs={args.num_envs} args.num_eval_envs={args.num_eval_envs}")
     print(f"args.minibatch_size={args.minibatch_size} args.batch_size={args.batch_size} args.update_epochs={args.update_epochs}")
     print(f"####")
+    
     action_space_low, action_space_high = torch.from_numpy(envs.single_action_space.low).to(device), torch.from_numpy(envs.single_action_space.high).to(device)
+    
     def clip_action(action: torch.Tensor):
         return torch.clamp(action.detach(), action_space_low, action_space_high)
 
     if args.checkpoint:
         agent.load_state_dict(torch.load(args.checkpoint))
+
 
     for iteration in range(1, args.num_iterations + 1):
         print(f"Epoch: {iteration}, global_step={global_step}")
@@ -260,6 +283,7 @@ if __name__ == "__main__":
             eps_lens = []
             successes = []
             failures = []
+
             for _ in range(args.num_eval_steps):
                 with torch.no_grad():
                     eval_obs, _, eval_terminations, eval_truncations, eval_infos = eval_envs.step(agent.get_action(eval_obs, deterministic=True))
@@ -271,13 +295,16 @@ if __name__ == "__main__":
                             successes.append(eval_infos["final_info"]["success"][mask].cpu().numpy())
                         if "fail" in eval_infos:
                             failures.append(eval_infos["final_info"]["fail"][mask].cpu().numpy())
+            
             returns = np.concatenate(returns)
             eps_lens = np.concatenate(eps_lens)
             print(f"Evaluated {args.num_eval_steps * args.num_eval_envs} steps resulting in {len(eps_lens)} episodes")
+            
             if len(successes) > 0:
                 successes = np.concatenate(successes)
                 if writer is not None: writer.add_scalar("charts/eval_success_rate", successes.mean(), global_step)
                 print(f"eval_success_rate={successes.mean()}")
+            
             if len(failures) > 0:
                 failures = np.concatenate(failures)
                 if writer is not None: writer.add_scalar("charts/eval_fail_rate", failures.mean(), global_step)
@@ -289,10 +316,12 @@ if __name__ == "__main__":
                 writer.add_scalar("charts/eval_episodic_length", eps_lens.mean(), global_step)
             if args.evaluate:
                 break
+        
         if args.save_model and iteration % args.eval_freq == 1:
             model_path = f"runs/{run_name}/ckpt_{iteration}.pt"
             torch.save(agent.state_dict(), model_path)
             print(f"model saved to {model_path}")
+        
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -300,6 +329,7 @@ if __name__ == "__main__":
             optimizer.param_groups[0]["lr"] = lrnow
 
         rollout_time = time.time()
+        
         for step in range(0, args.num_steps):
             global_step += args.num_envs
             obs[step] = next_obs
@@ -309,6 +339,7 @@ if __name__ == "__main__":
             with torch.no_grad():
                 action, logprob, _, value = agent.get_action_and_value(next_obs)
                 values[step] = value.flatten()
+            
             actions[step] = action
             logprobs[step] = logprob
 
@@ -321,20 +352,25 @@ if __name__ == "__main__":
                 final_info = infos["final_info"]
                 done_mask = infos["_final_info"]
                 episodic_return = final_info['episode']['r'][done_mask].cpu().numpy().mean()
+        
                 if "success" in final_info:
                     writer.add_scalar("charts/success_rate", final_info["success"][done_mask].cpu().numpy().mean(), global_step)
                 if "fail" in final_info:
                     writer.add_scalar("charts/fail_rate", final_info["fail"][done_mask].cpu().numpy().mean(), global_step)
+    
                 writer.add_scalar("charts/episodic_return", episodic_return, global_step)
                 writer.add_scalar("charts/episodic_length", final_info["elapsed_steps"][done_mask].cpu().numpy().mean(), global_step)
 
                 final_values[step, torch.arange(args.num_envs, device=device)[done_mask]] = agent.get_value(infos["final_observation"][done_mask]).view(-1)
+        
         rollout_time = time.time() - rollout_time
+        
         # bootstrap value according to termination and truncation
         with torch.no_grad():
             next_value = agent.get_value(next_obs).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
+            
             for t in reversed(range(args.num_steps)):
                 if t == args.num_steps - 1:
                     next_not_done = 1.0 - next_done
@@ -381,13 +417,16 @@ if __name__ == "__main__":
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
+
         # Optimizing the policy and value network
         agent.train()
         b_inds = np.arange(args.batch_size)
         clipfracs = []
         update_time = time.time()
+        
         for epoch in range(args.update_epochs):
             np.random.shuffle(b_inds)
+
             for start in range(0, args.batch_size, args.minibatch_size):
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
@@ -458,6 +497,7 @@ if __name__ == "__main__":
         writer.add_scalar("charts/update_time", update_time, global_step)
         writer.add_scalar("charts/rollout_time", rollout_time, global_step)
         writer.add_scalar("charts/rollout_fps", args.num_envs * args.num_steps / rollout_time, global_step)
+    
     if not args.evaluate:
         if args.save_model:
             model_path = f"runs/{run_name}/final_ckpt.pt"

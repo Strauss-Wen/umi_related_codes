@@ -133,8 +133,8 @@ if __name__ == "__main__":
         run_name = args.exp_name
     writer = None
 
-    print("Running evaluation")
 
+    print("Running evaluation")
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -143,12 +143,15 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+
     # env setup
     # switch render mode between rgb_array and human
     env_kwargs = dict(obs_mode="state", control_mode="pd_joint_delta_pos", render_mode="rgb_array", sim_backend="gpu")
     envs = gym.make(args.env_id, num_envs=1, **env_kwargs)
+
     if isinstance(envs.action_space, gym.spaces.Dict):
         envs = FlattenActionSpaceWrapper(envs)
+
     if args.capture_video:
         eval_output_dir = f"runs/{run_name}/videos"
         if args.evaluate:
@@ -158,8 +161,11 @@ if __name__ == "__main__":
             save_video_trigger = lambda x : (x // args.num_steps) % args.save_train_video_freq == 0
             envs = RecordEpisode(envs, output_dir=f"runs/{run_name}/train_videos", save_trajectory=False, save_video_trigger=save_video_trigger, max_steps_per_video=args.num_steps, video_fps=30)
         eval_envs = RecordEpisode(eval_envs, output_dir=eval_output_dir, save_trajectory=args.evaluate, trajectory_name="trajectory", max_steps_per_video=args.num_eval_steps, video_fps=30)
+
+
     envs = ManiSkillVectorEnv(envs, 1, ignore_terminations=not args.partial_reset, **env_kwargs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+
 
     agent = Agent(envs).to(device)
 
@@ -174,17 +180,21 @@ if __name__ == "__main__":
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
+
     next_obs, _ = envs.reset(seed=args.seed)
     next_done = torch.zeros(args.num_envs, device=device)
     eps_returns = torch.zeros(args.num_envs, dtype=torch.float, device=device)
     eps_lens = np.zeros(args.num_envs)
     place_rew = torch.zeros(args.num_envs, device=device)
     action_space_low, action_space_high = torch.from_numpy(envs.single_action_space.low).to(device), torch.from_numpy(envs.single_action_space.high).to(device)
+
     def clip_action(action: torch.Tensor):
         return torch.clamp(action.detach(), action_space_low, action_space_high)
 
     if args.checkpoint:
         agent.load_state_dict(torch.load(args.checkpoint))
+
+
 
     for iteration in range(1, args.num_iterations + 1):
         print(f"Epoch: {iteration}, global_step={global_step}")
